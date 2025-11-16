@@ -220,12 +220,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 26011627}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.587, y: 0, z: 2.739}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -5.587, y: -0.629, z: 2.739}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1054456476}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &70220914
 GameObject:
@@ -697,12 +697,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 956261252}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.52, y: 0, z: 5.8}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 5.23, y: -0.629, z: -0.19}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1054456476}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1054456473
 GameObject:
@@ -714,7 +714,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1054456476}
   - component: {fileID: 1054456475}
-  - component: {fileID: 1054456474}
+  - component: {fileID: 1054456477}
   m_Layer: 0
   m_Name: PGS_SplineDemo
   m_TagString: Untagged
@@ -722,35 +722,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1054456474
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1054456473}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1f0e8f6448a3d0c4ab847fe9112ae5f7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  controlPoints:
-  - {fileID: 70220915}
-  - {fileID: 2010193252}
-  - {fileID: 1121811300}
-  - {fileID: 163256742}
-  - {fileID: 1819000966}
-  startPoint: {fileID: 26011631}
-  endPoint: {fileID: 956261256}
-  useProceduralPoints: 1
-  curvature: 0
-  splinePointCount: 4
-  segmentsPerCurveSegment: 10
-  generatedPoints:
-  - {x: -5.587, y: 0, z: 2.739}
-  - {x: -1.9216897, y: 0, z: 3.7491302}
-  - {x: 1.7436204, y: 0, z: 4.75926}
-  - {x: 5.52, y: 0, z: 5.8}
 --- !u!120 &1054456475
 LineRenderer:
   serializedVersion: 2
@@ -880,6 +851,8 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 26011631}
+  - {fileID: 956261256}
   - {fileID: 70220915}
   - {fileID: 2010193252}
   - {fileID: 1121811300}
@@ -887,6 +860,47 @@ Transform:
   - {fileID: 1819000966}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1054456477
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1054456473}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f0e8f6448a3d0c4ab847fe9112ae5f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controlPoints:
+  - {fileID: 70220915}
+  - {fileID: 2010193252}
+  - {fileID: 1121811300}
+  - {fileID: 163256742}
+  startPoint: {fileID: 26011631}
+  endPoint: {fileID: 956261256}
+  curvature: 0
+  splinePointCount: 15
+  segmentResolution: 1
+  useProceduralPoints: 1
+  generatedPoints:
+  - {x: -5.587, y: 0, z: 2.739}
+  - {x: -4.9109373, y: 0, z: 2.5559375}
+  - {x: -4.2348747, y: 0, z: 2.372875}
+  - {x: -3.5588126, y: 0, z: 2.1898127}
+  - {x: -2.88275, y: 0, z: 2.00675}
+  - {x: -2.2066877, y: 0, z: 1.8236876}
+  - {x: -1.5306253, y: 0, z: 1.640625}
+  - {x: -0.85456276, y: 0, z: 1.4575626}
+  - {x: -0.17850018, y: 0, z: 1.2745}
+  - {x: 0.4975624, y: 0, z: 1.0914375}
+  - {x: 1.1736245, y: 0, z: 0.908375}
+  - {x: 1.8496866, y: 0, z: 0.7253127}
+  - {x: 2.5257492, y: 0, z: 0.5422499}
+  - {x: 3.2018118, y: 0, z: 0.35918736}
+  - {x: 3.8778744, y: 0, z: 0.17612505}
+  - {x: 4.553937, y: 0, z: -0.006937504}
+  - {x: 5.23, y: 0, z: -0.19}
 --- !u!1 &1121811299
 GameObject:
   m_ObjectHideFlags: 0
@@ -988,5 +1002,3 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 1054456476}
-  - {fileID: 26011631}
-  - {fileID: 956261256}

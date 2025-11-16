@@ -11,16 +11,21 @@ public class PGSSpline : MonoBehaviour
     [Header("Procedural Mode")]
     public Transform startPoint;
     public Transform endPoint;
-    public bool useProceduralPoints = true;
+
     [Range(-5f, 5f)] public float curvature = 0f;
-    [Range(0, 20)] public int splinePointCount = 4;
-    [Range(1, 20)] public int segmentsPerCurveSegment = 10;
+    [Range(2, 30)] public int splinePointCount = 4;
+    [Range(1, 10)] public int segmentResolution = 1;
+
+    public bool useProceduralPoints = true;
     public Vector3[] generatedPoints;
 
     private LineRenderer line;
 
-    //CHECK: is splinePointCount same as interalPointCount?
-    //TODO: Curvature now can determine only left and right curve arching. it should be able to go up and down as well
+//CHECK: is splinePointCount same as interalPointCount?
+//TODO: Curvature now can determine only left and right curve arching. it should be able to go up and down as well
+//TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline
+//Maybe expose where the peak weight should be, for more control
+
 
     private void Awake()
     {
@@ -61,28 +66,40 @@ public class PGSSpline : MonoBehaviour
 
         Vector3 A = startPoint.position;
         Vector3 B = endPoint.position;
-
         Vector3 AB = B - A;
+
         float distance = AB.magnitude;
         Vector3 dir = AB.normalized;
 
-        // Two base points along the straight line A -> B
-        //Vector3 p1Base = A;
-        //Vector3 p2Base = A + dir * (distance * 1.0f);
-        Vector3 p1Base = A + dir * (distance * 0.33f); // about 1/3 of the way
-        Vector3 p2Base = A + dir * (distance * 0.66f); // about 2/3 of the way
+        //Build array of points: A/Start + internal/spline points + B/End
+        int totalPoints = splinePointCount + 2;
+        generatedPoints = new Vector3[totalPoints];
+        generatedPoints[0] = A;
+        generatedPoints[totalPoints - 1] = B;
+
+        #region 4 manual point old code
+            // Two base points along the straight line A -> B
+            //Vector3 p1Base = A;
+            //Vector3 p2Base = A + dir * (distance * 1.0f);
+            //Vector3 p1Base = A + dir * (distance * 0.33f); // about 1/3 of the way
+            //Vector3 p2Base = A + dir * (distance * 0.66f); // about 2/3 of the way
+        #endregion
 
         // Sideways direction (perpendicular to AB, using world up)
         Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;
 
-        // Curvature offset; you can scale by distance if you want stronger bend on long lines
-        Vector3 offset = side * curvature;
+        //Looping through p1 to pN-2: Only the spline points and not the start/end points
+        for (int p = 1; p <= totalPoints - 2; p++) 
+        {
+            float t = p / (float)(totalPoints - 1);
+            Vector3 onLine = A + dir * (distance * t);
 
-        generatedPoints = new Vector3[4];
-        generatedPoints[0] = A;
-        generatedPoints[1] = p1Base + offset;
-        generatedPoints[2] = p2Base + offset;
-        generatedPoints[3] = B;
+            // Curvature offset; you can scale by distance if you want stronger bend on long lines
+            float arcFactor = Mathf.Sin(Mathf.PI * t);
+            Vector3 offset = side * curvature * arcFactor;
+
+            generatedPoints[p] = onLine + offset;
+        }
     }
 
     private void DrawStraightLinesBetweenControlPoints()
@@ -99,13 +116,14 @@ public class PGSSpline : MonoBehaviour
             line.SetPosition(i, controlPoints[i].position);
         }
     }
+
     private void DrawCatmullRomSpline() 
     {
         if (controlPoints == null || controlPoints.Length < 4)
             return;
 
         int numCurves = controlPoints.Length - 3;
-        int totalSegments = numCurves * segmentsPerCurveSegment;
+        int totalSegments = numCurves * segmentResolution;
 
         // +1 to include the very last endpoint
         line.positionCount = totalSegments + 1;
@@ -119,9 +137,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p2 = controlPoints[i + 2].position;
             Vector3 p3 = controlPoints[i + 3].position;
 
-            for (int s = 0; s < segmentsPerCurveSegment; s++)
+            for (int s = 0; s < segmentResolution; s++)
             {
-                float t = s / (float)segmentsPerCurveSegment;
+                float t = s / (float)segmentResolution;
                 line.SetPosition(index, CatmullRom(p0, p1, p2, p3, t));
                 index++;
             }
@@ -150,7 +168,8 @@ public class PGSSpline : MonoBehaviour
     private void DrawCatmullRomProceduralSpline(Vector3[] points) 
     {
         int numCurves = points.Length - 3;
-        int totalSegments = numCurves * segmentsPerCurveSegment;
+        int totalSegments = numCurves * segmentResolution;
+//ASK: WHY +1?
         line.positionCount = totalSegments + 1;
 
         //Storing positions of each per each curve segment 
@@ -163,9 +182,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p3 = points[i + 3];
 
             //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
-            for (int s = 0; s < segmentsPerCurveSegment; s++)
+            for (int s = 0; s < segmentResolution; s++)
             {
-                float t = s / (float)segmentsPerCurveSegment;
+                float t = s / (float)segmentResolution;
                 line.SetPosition(index, CatmullRom(p0, p1, p2, p3, t));
                 index++;
             }
@@ -210,31 +229,33 @@ public class PGSSpline : MonoBehaviour
 
         if (pts == null || pts.Length < 4)
             return;
-
-        // --- 1) Draw spheres at the control points (p0, p1, p2, p3, ...) ---
-
+        
+        //Draw spheres at control points
         Gizmos.color = Color.yellow;
-        float sphereRadius = 0.1f;
+        float sphereRadius = 0.065f;
 
         for (int i = 0; i < pts.Length; i++)
         {
             Gizmos.DrawSphere(pts[i], sphereRadius);
         }
 
-        // Optionally colour-code the first 4 so you can see p0..p3 clearly:
-        Gizmos.color = Color.red; Gizmos.DrawSphere(pts[0], sphereRadius * 1.2f);   // p0
-        Gizmos.color = Color.green; Gizmos.DrawSphere(pts[1], sphereRadius * 1.2f);   // p1
-        Gizmos.color = Color.blue; Gizmos.DrawSphere(pts[2], sphereRadius * 1.2f);   // p2
-        Gizmos.color = Color.magenta; Gizmos.DrawSphere(pts[3], sphereRadius * 1.2f);   // p3
+        Gizmos.color = Color.red; 
+        Gizmos.DrawSphere(pts[0], sphereRadius * 1.2f);   // p0
+        Gizmos.color = Color.green; 
+        Gizmos.DrawSphere(pts[1], sphereRadius * 1.2f);   // p1
+        int lastP = pts.Length - 2;
+        Gizmos.color = Color.green; 
+        Gizmos.DrawSphere(pts[lastP], sphereRadius * 1.2f);   // pN - 2
+        int endP = pts.Length - 1;
+        Gizmos.color = Color.red; 
+        Gizmos.DrawSphere(pts[endP], sphereRadius * 1.2f);   // pN - 1
 
-        // --- 2) Draw the spline itself as a gizmo line ---
-
+        //Spline Color
         Gizmos.color = Color.white;
         int numCurves = pts.Length - 3;
         if (numCurves <= 0)
             return;
 
-        // Start at t = 0 on the first segment (between p1 and p2)
         Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
 
         for (int i = 0; i < numCurves; i++)
@@ -244,9 +265,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p2 = pts[i + 2];
             Vector3 p3 = pts[i + 3];
 
-            for (int s = 1; s <= segmentsPerCurveSegment; s++)
+            for (int s = 1; s <= segmentResolution; s++)
             {
-                float t = s / (float)segmentsPerCurveSegment;
+                float t = s / (float)segmentResolution;
                 Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
 
                 Gizmos.DrawLine(previousPos, pos);
