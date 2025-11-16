@@ -12,7 +12,9 @@ public class PGSSpline : MonoBehaviour
     public Transform startPoint;
     public Transform endPoint;
 
-    [Range(-20f, 20f)] public float curvature = 0f;
+    //[Range(-20f, 20f)] public float curvature = 0f;
+    [Range(-20, 20f)] public float horizontalCurvature = 0f;
+    [Range(-20, 20f)] public float verticalCurvature = 0f;
     [Range(2, 30)] public int splinePointCount = 4;
     [Range(1, 5)] public int splineSegmentResolution = 1;
     [Range(1, 3)] public float pathLengthMultiplier = 1f;
@@ -59,8 +61,8 @@ public class PGSSpline : MonoBehaviour
         float distance = AB.magnitude;
 
         //Build array of points: A/Start + internal/spline points + B/End
-        int totalPoints = splinePointCount + 2;
-        generatedPoints = new Vector3[totalPoints];
+        int totalPointsLength = splinePointCount + 2;
+        generatedPoints = new Vector3[totalPointsLength];
 
         float extra = distance * (pathLengthMultiplier - 1f) * 0.5f;
         Vector3 extendedA = A - dir * extra;
@@ -68,7 +70,7 @@ public class PGSSpline : MonoBehaviour
         float extendedDistance = (extendedB - extendedA).magnitude;
 
         generatedPoints[0] = A;
-        generatedPoints[totalPoints - 1] = B;
+        generatedPoints[totalPointsLength - 1] = B;
 
         #region 4 manual point old code
         // Two base points along the straight line A -> B
@@ -77,17 +79,18 @@ public class PGSSpline : MonoBehaviour
         //Vector3 p1Base = A + dir * (distance * 0.33f); // about 1/3 of the way
         //Vector3 p2Base = A + dir * (distance * 0.66f); // about 2/3 of the way
         #endregion
-        // Sideways direction (perpendicular to AB, using world up)
-        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;
-        
-        //Looping through p1 to pN-2: Only the spline points and not the start/end points
-        for (int p = 1; p <= totalPoints - 2; p++) 
+        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)
+
+        //ASK: Why totalPoints - 2? Because end point is actually at [totalPoints - 1] in terms of indexing
+        //Placement Logic: Looping through p1 to pN-2: Only the spline points and not the start/end points
+        for (int p = 1; p <= totalPointsLength - 2; p++) 
         {
-            float t = p / (float)(totalPoints - 1);
+        //ASK: Why totalPoints - 1?
+            float t = p / (float)(totalPointsLength - 1);
             Vector3 onLine = extendedA + dir * (extendedDistance * t);
 
             float arcFactor = Mathf.Sin(Mathf.PI * t); // Curvature offset; you can scale by distance if you want stronger bend on long lines
-            Vector3 offset = side * curvature * arcFactor;
+            Vector3 offset = (side * horizontalCurvature * arcFactor) + (Vector3.up * verticalCurvature * arcFactor);
 
             generatedPoints[p] = onLine + offset;
         }
@@ -95,14 +98,17 @@ public class PGSSpline : MonoBehaviour
 
     private void DrawCatmullRomProceduralSpline(Vector3[] points)
     {
-        int numCurves = points.Length - 3;
-        int totalSegments = numCurves * splineSegmentResolution;
-        //ASK: WHY +1?
+        //Catmull-Rom Segement = Total Points - 3 because a segement here denotes the curve between p1 and p2, p0 and p3 are used for tangents
+//ASK: What does it mean that start n end are used for tangents?
+        int totalCatmullCurves = points.Length - 3;
+        int totalSegments = totalCatmullCurves * splineSegmentResolution;
+ //ASK: WHY +1?
+//FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.
         line.positionCount = totalSegments + 1;
-
+//FORUM: Say how I had an issue where I didn't do +1 which lead to the last point not being drawn.
         //Storing positions of each per each curve segment 
         int index = 0;
-        for (int i = 0; i < numCurves; i++)
+        for (int i = 0; i < totalCatmullCurves; i++)
         {
             Vector3 p0 = points[i];
             Vector3 p1 = points[i + 1];
