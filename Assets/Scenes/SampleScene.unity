@@ -134,7 +134,7 @@ GameObject:
   m_Layer: 0
   m_Name: StartPoint
   m_TagString: Untagged
-  m_Icon: {fileID: 7174288486110832750, guid: 0000000000000000d000000000000000, type: 0}
+  m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
@@ -166,7 +166,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 26011627}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -611,7 +611,7 @@ GameObject:
   m_Layer: 0
   m_Name: EndPoint
   m_TagString: Untagged
-  m_Icon: {fileID: 7174288486110832750, guid: 0000000000000000d000000000000000, type: 0}
+  m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
@@ -643,7 +643,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 956261252}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -880,26 +880,16 @@ MonoBehaviour:
   startPoint: {fileID: 26011631}
   endPoint: {fileID: 956261256}
   curvature: 0
-  splinePointCount: 15
-  segmentResolution: 1
+  splinePointCount: 4
+  splineSegmentResolution: 1
+  pathLengthMultiplier: 1
   useProceduralPoints: 1
   generatedPoints:
   - {x: -5.587, y: 0, z: 2.739}
-  - {x: -4.9109373, y: 0, z: 2.5559375}
-  - {x: -4.2348747, y: 0, z: 2.372875}
-  - {x: -3.5588126, y: 0, z: 2.1898127}
-  - {x: -2.88275, y: 0, z: 2.00675}
-  - {x: -2.2066877, y: 0, z: 1.8236876}
-  - {x: -1.5306253, y: 0, z: 1.640625}
-  - {x: -0.85456276, y: 0, z: 1.4575626}
-  - {x: -0.17850018, y: 0, z: 1.2745}
-  - {x: 0.4975624, y: 0, z: 1.0914375}
-  - {x: 1.1736245, y: 0, z: 0.908375}
-  - {x: 1.8496866, y: 0, z: 0.7253127}
-  - {x: 2.5257492, y: 0, z: 0.5422499}
-  - {x: 3.2018118, y: 0, z: 0.35918736}
-  - {x: 3.8778744, y: 0, z: 0.17612505}
-  - {x: 4.553937, y: 0, z: -0.006937504}
+  - {x: -3.4236, y: 0, z: 2.1532001}
+  - {x: -1.2602, y: 0, z: 1.5674}
+  - {x: 0.9031997, y: 0, z: 0.98160005}
+  - {x: 3.0665998, y: 0, z: 0.39579988}
   - {x: 5.23, y: 0, z: -0.19}
 --- !u!1 &1121811299
 GameObject:
