@@ -8,7 +8,7 @@ public class PGSSpline : MonoBehaviour
     [Header("Manual Mode")]
     public Transform[] controlPoints;
 
-    [Header("Procedural Mode")]
+    [Header("Procedural Mode Settings")]
     public Transform startPoint;
     public Transform endPoint;
 
@@ -19,17 +19,24 @@ public class PGSSpline : MonoBehaviour
     [Range(1, 5)] public int splineSegmentResolution = 1;
     [Range(1, 3)] public float pathLengthMultiplier = 1f;
 
+    [Header("Spiral Settings")]
+    public bool useSpiral = false;
+    [Range(0, 25f)] public float spiralRadius = 1f;
+    [Range(0, 10f)] public float spiralTurns = 1f;
+
     public bool useProceduralPoints = true;
     public Vector3[] generatedPoints;
 
     private LineRenderer line;
 
-//CHECK: is splinePointCount same as interalPointCount?
-//TODO: Curvature now can determine only left and right curve arching. it should be able to go up and down as well
-//TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline.
-//Maybe expose where the peak weight should be, for more control
-//CHECK: Should we clamp curvature based on distance between A and B?
-//CONSIDER: Should I leave the pathLengthMultipier? I could just have the user place the start n end further.
+    //CHECK: is splinePointCount same as interalPointCount?
+    //TODO: Curvature now can determine only left and right curve arching. it should be able to go up and down as well
+    //TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline.
+    //Maybe expose where the peak weight should be, for more control
+    //CHECK: Should we clamp curvature based on distance between A and B?
+    //CONSIDER: Should I leave the pathLengthMultipier? I could just have the user place the start n end further.
+    //TODO: Add maximum distance limit between start and end points for procedural generation?
+    //FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.Say how I had an issue where I didn't do +1 to line.positionCount = totalSegments which lead to the last point not being drawn.
 
     private void Awake()
     {
@@ -58,55 +65,38 @@ public class PGSSpline : MonoBehaviour
         Vector3 B = endPoint.position;
         Vector3 AB = B - A;
         Vector3 dir = AB.normalized;
+        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)
         float distance = AB.magnitude;
 
-        //Build array of points: A/Start + internal/spline points + B/End
-        int totalPointsLength = splinePointCount + 2;
+        int totalPointsLength = splinePointCount + 2;  //Build array of points: A/Start + internal/spline points + B/End
         generatedPoints = new Vector3[totalPointsLength];
+        generatedPoints[0] = A;
+        generatedPoints[totalPointsLength - 1] = B;
 
+        //Extending the line AB based on pathLengthMultiplier
         float extra = distance * (pathLengthMultiplier - 1f) * 0.5f;
         Vector3 extendedA = A - dir * extra;
         Vector3 extendedB = B + dir * extra;
         float extendedDistance = (extendedB - extendedA).magnitude;
 
-        generatedPoints[0] = A;
-        generatedPoints[totalPointsLength - 1] = B;
-
-        #region 4 manual point old code
-        // Two base points along the straight line A -> B
-        //Vector3 p1Base = A;
-        //Vector3 p2Base = A + dir * (distance * 1.0f);
-        //Vector3 p1Base = A + dir * (distance * 0.33f); // about 1/3 of the way
-        //Vector3 p2Base = A + dir * (distance * 0.66f); // about 2/3 of the way
-        #endregion
-        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)
-
-        //ASK: Why totalPoints - 2? Because end point is actually at [totalPoints - 1] in terms of indexing
-        //Placement Logic: Looping through p1 to pN-2: Only the spline points and not the start/end points
+        //Positioning the internal spline points between A and B
         for (int p = 1; p <= totalPointsLength - 2; p++) 
         {
-        //ASK: Why totalPoints - 1?
             float t = p / (float)(totalPointsLength - 1);
             Vector3 onLine = extendedA + dir * (extendedDistance * t);
-
-            float arcFactor = Mathf.Sin(Mathf.PI * t); // Curvature offset; you can scale by distance if you want stronger bend on long lines
+            float arcFactor = Mathf.Sin(Mathf.PI * t);
             Vector3 offset = (side * horizontalCurvature * arcFactor) + (Vector3.up * verticalCurvature * arcFactor);
-
             generatedPoints[p] = onLine + offset;
         }
     }
 
     private void DrawCatmullRomProceduralSpline(Vector3[] points)
     {
-        //Catmull-Rom Segement = Total Points - 3 because a segement here denotes the curve between p1 and p2, p0 and p3 are used for tangents
-//ASK: What does it mean that start n end are used for tangents?
         int totalCatmullCurves = points.Length - 3;
         int totalSegments = totalCatmullCurves * splineSegmentResolution;
- //ASK: WHY +1?
-//FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.
         line.positionCount = totalSegments + 1;
-//FORUM: Say how I had an issue where I didn't do +1 which lead to the last point not being drawn.
-        //Storing positions of each per each curve segment 
+
+        //Iterating through points and storing positions of each point per each curve segment 
         int index = 0;
         for (int i = 0; i < totalCatmullCurves; i++)
         {
@@ -124,7 +114,6 @@ public class PGSSpline : MonoBehaviour
             }
         }
 
-        // last point (t=1)
         Vector3 lp0 = points[points.Length - 4];
         Vector3 lp1 = points[points.Length - 3];
         Vector3 lp2 = points[points.Length - 2];
