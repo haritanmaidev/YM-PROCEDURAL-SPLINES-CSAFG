@@ -6,13 +6,9 @@ public class PGSSpline : MonoBehaviour
 {
     private LineRenderer line;
 
-    [Header("Manual Mode")]
-    public Transform[] controlPoints;
-
     [Header("Procedural Mode Settings")]
     public Transform startPoint;
     public Transform endPoint;
-    public bool useProceduralPoints = true;
     public Vector3[] generatedPoints;
 
     [Header("Catmull Rom Spline Settings")]
@@ -36,7 +32,6 @@ public class PGSSpline : MonoBehaviour
     public int seed = 11111;
     [Range(0f, 5f)] public float noiseAmplitude = 1f;
     [Range(0.1f, 10f)] public float noiseFrequency = 1f;
-    [Range(0f, 2f)] public float noiseVerticalBias = 1f;
 
     [Header("Target Bend")]
     public bool useTargetBend = true;
@@ -44,8 +39,14 @@ public class PGSSpline : MonoBehaviour
     public bool bendAway = true;
     [Range(1f, 20f)] public float bendRadius = 5f;
     [Range(1f, 5f)] public float bendStrength = 1f;
-    public List<Transform> bendTargets = new List<Transform>();
     private const float bendClamp = 0.01f; //Explain well
+
+    [Header("Physics Targets")]
+    public bool usePhysicsTargets = false;
+    public LayerMask bendLayer = 3;
+    public int maxPhysicsTargetsPerPoint = 4;
+
+    //FIX: CURVE WEIGHT ARC NEEDS TO BE FIXED, IT EFFECTS THINGS OUTSIDE CURVATURE SECTION
 
     private void Awake()
     {
@@ -54,15 +55,8 @@ public class PGSSpline : MonoBehaviour
 
     private void Update()
     {
-        if (useProceduralPoints)
-        {
-            GenerateControlPointsFromAtoB();
-            DrawCatmullRomProceduralSpline(generatedPoints);
-        }
-        else
-        {
-            if (controlPoints != null && controlPoints.Length >= 4) DrawCatmullRomFromTransforms(controlPoints);
-        }
+        GenerateControlPointsFromAtoB();
+        DrawCatmullRomProceduralSpline(generatedPoints);
     }
 
     private void GenerateControlPointsFromAtoB()
@@ -126,7 +120,7 @@ public class PGSSpline : MonoBehaviour
                 float upVal = (nUp - 0.5f) * 2f;
 
                 float radius = noiseAmplitude * arcWeightFactor;
-                float sidewayNoise = noiseAmplitude * arcWeightFactor * noiseVerticalBias;
+                float sidewayNoise = noiseAmplitude * arcWeightFactor;
 
                 noiseOffset = (side * sideVal * radius) + (binormal* upVal * radius);
             }
@@ -140,16 +134,23 @@ public class PGSSpline : MonoBehaviour
                 //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
 
-                for (int i = 0; i < bendTargets.Count; i++)
+                if (usePhysicsTargets) 
                 {
-                    Transform tTarget = bendTargets[i];
-                    targetOffset += ComputeTargetBendOffset(basePos, tTarget, arcWeightFactor);
+                    Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
+
+                    int count = Mathf.Min(cols.Length, maxPhysicsTargetsPerPoint);
+                    for (int i = 0; i < count; i++) 
+                    {
+                        Collider c = cols[i];
+                        if (c == null) continue;
+
+                        targetOffset += ComputeColliderBendOffset(basePos, c, arcWeightFactor);
+                    }
                 }
             }
 
             generatedPoints[p] = onLine + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
         }
-
 
         if (useEvenSpacing && generatedPoints != null)
         {
@@ -277,22 +278,22 @@ public class PGSSpline : MonoBehaviour
         points[pointCount - 1] = end;
     }
 
-    Vector3 ComputeTargetBendOffset(Vector3 basePos, Transform target, float arcWeightFactor) 
+    Vector3 ComputeColliderBendOffset(Vector3 basePos, Collider col, float archWeightFactor) 
     {
-        Vector3 toTarget = target.position - basePos;
-        float distToTarget = toTarget.magnitude;
-        if (distToTarget >= bendRadius) return Vector3.zero;
+        Vector3 closest = col.ClosestPoint(basePos);
+        Vector3 toTarget = closest - basePos;
+        float distanceToTarget = toTarget.magnitude;
+        if(distanceToTarget >= bendRadius) return Vector3.zero;
 
-        float safeDist = Mathf.Max(distToTarget, bendClamp);
+        float safeDist = Mathf.Max(distanceToTarget, bendClamp);
         Vector3 dirToTarget = toTarget / safeDist;
-        if (bendAway) dirToTarget = -dirToTarget;
+        if(bendAway) dirToTarget = -dirToTarget;
 
-        float bend = 1f - (distToTarget / bendRadius); //LEARN
+        float bend = 1f - (distanceToTarget / bendRadius);//LEARN
         float weight = bend * bend;
-        weight *= arcWeightFactor;
+        weight *= archWeightFactor;
 
         return dirToTarget * bendStrength * weight;
-
     }
 
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
@@ -307,49 +308,15 @@ public class PGSSpline : MonoBehaviour
                        (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
     }
 
-    private void DrawCatmullRomFromTransforms(Transform[] tPoints)
-    {
-        //Convert transform into position Vector3 and pass it to ProceduralSplineDrawer / DrawCatmullRomVector3Array
-        Vector3[] points = new Vector3[tPoints.Length];
-        for (int i = 0; i < tPoints.Length; i++)
-        {
-            points[i] = tPoints[i].position;
-        }
-
-        DrawCatmullRomProceduralSpline(points);
-    }
-
     //TODO: REFACTOR THIS
     private void OnDrawGizmos()
     {
         // Decide which set of points to visualize
         Vector3[] pts = null;
 
-        if (useProceduralPoints)
-        {
-            // In the editor, GenerateControlPointsFromAtoB can still run,
-            // because it only uses Transform positions.
-            if (startPoint == null || endPoint == null)
-                return;
+        GenerateControlPointsFromAtoB();
 
-            GenerateControlPointsFromAtoB();
-            pts = generatedPoints;
-        }
-        else
-        {
-            if (controlPoints == null || controlPoints.Length < 4)
-                return;
-
-            pts = new Vector3[controlPoints.Length];
-            for (int i = 0; i < controlPoints.Length; i++)
-            {
-                if (controlPoints[i] != null)
-                    pts[i] = controlPoints[i].position;
-            }
-        }
-
-        if (pts == null || pts.Length < 4)
-            return;
+        pts = generatedPoints;
         
         //Draw spheres at control points
         Gizmos.color = Color.yellow;
