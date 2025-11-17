@@ -13,11 +13,13 @@ public class PGSSpline : MonoBehaviour
     public Transform endPoint;
 
     //[Range(-20f, 20f)] public float curvature = 0f;
+    [Header("Catmull Rom Spline Settings")]
     [Range(-20, 20f)] public float horizontalCurvature = 0f;
     [Range(-20, 20f)] public float verticalCurvature = 0f;
     [Range(2, 30)] public int splinePointCount = 4;
     [Range(1, 5)] public int splineSegmentResolution = 1;
     [Range(1, 3)] public float pathLengthMultiplier = 1f;
+    [Range(0, 5)] public float arcWeightInfluence = 1f;
 
     [Header("Spiral Settings")]
     public bool useSpiral = false;
@@ -37,6 +39,7 @@ public class PGSSpline : MonoBehaviour
     //CONSIDER: Should I leave the pathLengthMultipier? I could just have the user place the start n end further.
     //TODO: Add maximum distance limit between start and end points for procedural generation?
     //FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.Say how I had an issue where I didn't do +1 to line.positionCount = totalSegments which lead to the last point not being drawn.
+    //TODO: Add Arc weight setting to control where curvature and spiral have more effect along the spline or whether arc should effect at all
 
     private void Awake()
     {
@@ -65,10 +68,11 @@ public class PGSSpline : MonoBehaviour
         Vector3 B = endPoint.position;
         Vector3 AB = B - A;
         Vector3 dir = AB.normalized;
-        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)
+        Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)  
         float distance = AB.magnitude;
 
-        int totalPointsLength = splinePointCount + 2;  //Build array of points: A/Start + internal/spline points + B/End
+        //Build array of points: A/Start + internal/spline points + B/End
+        int totalPointsLength = splinePointCount + 2;  
         generatedPoints = new Vector3[totalPointsLength];
         generatedPoints[0] = A;
         generatedPoints[totalPointsLength - 1] = B;
@@ -84,9 +88,23 @@ public class PGSSpline : MonoBehaviour
         {
             float t = p / (float)(totalPointsLength - 1);
             Vector3 onLine = extendedA + dir * (extendedDistance * t);
-            float arcFactor = Mathf.Sin(Mathf.PI * t);
-            Vector3 offset = (side * horizontalCurvature * arcFactor) + (Vector3.up * verticalCurvature * arcFactor);
-            generatedPoints[p] = onLine + offset;
+
+            //Curvature logic
+            float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * arcWeightInfluence;
+            Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (Vector3.up * verticalCurvature * arcWeightFactor);
+
+            //Spiral logic
+            Vector3 spiralOffset = Vector3.zero;
+
+            if (useSpiral)
+            {
+                float angle = t * Mathf.PI * 2f * spiralTurns;
+                Vector3 raidialDir = (side * Mathf.Cos(angle)) + (Vector3.up * Mathf.Sin(angle));
+                float radius = spiralRadius * arcWeightFactor; 
+                spiralOffset = raidialDir * radius;
+            }
+
+            generatedPoints[p] = onLine + curvatureOffset + spiralOffset;
         }
     }
 
