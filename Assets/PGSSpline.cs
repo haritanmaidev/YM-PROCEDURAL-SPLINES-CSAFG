@@ -1,7 +1,6 @@
 using UnityEngine;
+using System.Collections.Generic;
 
-// This script will control a LineRenderer and
-// later generate spline points for it.
 [RequireComponent(typeof(LineRenderer))]
 public class PGSSpline : MonoBehaviour
 {
@@ -20,6 +19,7 @@ public class PGSSpline : MonoBehaviour
     [Range(2, 100)] public int splinePointCount = 4;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
+    const int denseSamplesPerCurve = 32; // good default
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
@@ -39,28 +39,13 @@ public class PGSSpline : MonoBehaviour
     [Range(0f, 2f)] public float noiseVerticalBias = 1f;
 
     [Header("Target Bend")]
-    public bool useTargetBend = false;
+    public bool useTargetBend = true;
+    public bool useEvenSpacing = true;
     public bool bendAway = true;
     [Range(0f, 20f)] public float bendRadius = 5f;
     [Range(0f, 5f)] public float bendStrength = 1f;
     public Transform bendTarget;
-
-    //FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.Say how I had an issue where I didn't do +1 to line.positionCount = totalSegments which lead to the last point not being drawn.
-    //CHECK: is splinePointCount same as interalPointCount?
-    //CHECK: Should we clamp curvature based on distance between A and B?
-    //CONSIDER: Should I leave the pathLengthMultipier? I could just have the user place the start n end further.
-    //CONSIDER: Segment resolution vs splinePointCount. Does splineCount * resolution lead to more internal points or just more segments between the same internal points?
-    //CONSIDER: Curvature now effects the whole spline, add option such that curvature effects from point to point? Which means by setting the point-point curvature, we should be able to achieve the same effect as now but when it comes to bending,
-    //this approach could be better because what if the object is at at dead center whic hwould mean that curve will be arcing at max weight + bend offset. even though we'd like a bend based on point-point around the target obj
-    //TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline. Maybe expose where the peak weight should be, for more control
-    //TODO: Add Arc weight setting to control where curvature and spiral have more effect along the spline or whether arc should effect at all
-    //TODO: Add maximum distance limit between start and end points for procedural generation?
-    //TODO: If theres no target object or B, do generating points in the forward direction of A
-    //TODO: Coroutine showcasing gradual spline ge
-    //TODO: Make P0 and P3 part of internal points
-    //TODO: L Systems: Add variable to decide how much to avoid convering at B. From start to end point with branches converging at or diverging from the end point B, kinda like 1.Flowering-budding, 2.Snowflake 
-    //TODO: L Systems with no convergence at B and only use B as direction reference
-    //TODO: L Systems per internal point towards random/upward direction OR the same generation but with random intervals along spline points
+    private const float BEND_EPSILON = 0.001f;
 
     private void Awake()
     {
@@ -146,17 +131,22 @@ public class PGSSpline : MonoBehaviour
                 noiseOffset = (side * sideVal * radius) + (binormal* upVal * radius);
             }
 
-            //Target/Object Based Bending Logic
+            //LEARN: Target/Object Based Bending Logic
             Vector3 targetOffset = Vector3.zero;
             if (useTargetBend && bendTarget != null) 
             {
+                //ASK: basePose here adds up everything, so this means the bend should always be calculated last? Is this intended?
+                //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
+                //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
                 Vector3 basePose = onLine + curvatureOffset + spiralOffset + noiseOffset;
                 Vector3 toTarget = bendTarget.position - basePose;
                 float distToTarget = toTarget.magnitude;
 
                 if (distToTarget < bendRadius) 
                 {
-                    Vector3 dirToTarget = toTarget.normalized;
+                    float safeDist = Mathf.Max(distToTarget, BEND_EPSILON);
+
+                    Vector3 dirToTarget = toTarget / safeDist;
                     if(bendAway) dirToTarget = -dirToTarget;
 
                     float bend = 1f - (distToTarget / bendRadius);
@@ -168,6 +158,12 @@ public class PGSSpline : MonoBehaviour
             }
 
             generatedPoints[p] = onLine + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
+        }
+
+
+        if (useEvenSpacing && generatedPoints != null)
+        {
+            RedistributePointsEvenlyAlongCurve(ref generatedPoints);
         }
     }
 
@@ -203,16 +199,85 @@ public class PGSSpline : MonoBehaviour
         line.SetPosition(index, CatmullRom(lp0, lp1, lp2, lp3, 1f));
     }
 
-    private void DrawCatmullRomFromTransforms(Transform[] tPoints) 
+    private void RedistributePointsEvenlyAlongCurve(ref Vector3[] points)
     {
-        //Convert transform into position Vector3 and pass it to ProceduralSplineDrawer / DrawCatmullRomVector3Array
-        Vector3[] points = new Vector3[tPoints.Length];
-        for (int i = 0; i < tPoints.Length; i++)
+        int pointCount = points.Length;
+        if (pointCount < 4)
+            return;
+
+        // ---------- STEP 1: Dense samples along current Catmull curve ----------
+        const int denseSamplesPerCurve = 32; // per Catmull segment
+        List<Vector3> densePoints = new List<Vector3>();
+
+        int numCurves = pointCount - 3;
+
+        for (int i = 0; i < numCurves; i++)
         {
-            points[i] = tPoints[i].position;
+            Vector3 p0 = points[i];
+            Vector3 p1 = points[i + 1];
+            Vector3 p2 = points[i + 2];
+            Vector3 p3 = points[i + 3];
+
+            for (int s = 0; s <= denseSamplesPerCurve; s++)
+            {
+                float t = s / (float)denseSamplesPerCurve;
+                Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
+
+                // Avoid duplicating the first sample of each segment except the first one
+                if (i > 0 && s == 0)
+                    continue;
+
+                densePoints.Add(pos);
+            }
         }
 
-        DrawCatmullRomProceduralSpline(points);
+        int denseCount = densePoints.Count;
+        if (denseCount < 2)
+            return;
+
+        // ---------- STEP 2: Cumulative distances ----------
+        float[] cumLen = new float[denseCount];
+        cumLen[0] = 0f;
+
+        for (int i = 1; i < denseCount; i++)
+        {
+            float segLen = Vector3.Distance(densePoints[i], densePoints[i - 1]);
+            cumLen[i] = cumLen[i - 1] + segLen;
+        }
+
+        float totalLen = cumLen[denseCount - 1];
+        if (totalLen <= 0f)
+            return;
+
+        // ---------- STEP 3: New points at equal distance intervals ----------
+        Vector3[] newPoints = new Vector3[pointCount];
+        int denseIndex = 0;
+
+        for (int j = 0; j < pointCount; j++)
+        {
+            float targetDist = (j / (float)(pointCount - 1)) * totalLen;
+
+            // move denseIndex forward until we bracket targetDist
+            while (denseIndex < denseCount - 2 && cumLen[denseIndex + 1] < targetDist)
+            {
+                denseIndex++;
+            }
+
+            float segmentStart = cumLen[denseIndex];
+            float segmentEnd = cumLen[denseIndex + 1];
+            float segmentLen = segmentEnd - segmentStart;
+
+            float u = 0f;
+            if (segmentLen > 0f)
+                u = (targetDist - segmentStart) / segmentLen;
+
+            Vector3 a = densePoints[denseIndex];
+            Vector3 b = densePoints[denseIndex + 1];
+
+            newPoints[j] = Vector3.Lerp(a, b, u);
+        }
+
+        points = newPoints;
     }
 
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
@@ -225,6 +290,18 @@ public class PGSSpline : MonoBehaviour
                        (-p0 + p2) * t +
                        (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
                        (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+    }
+
+    private void DrawCatmullRomFromTransforms(Transform[] tPoints)
+    {
+        //Convert transform into position Vector3 and pass it to ProceduralSplineDrawer / DrawCatmullRomVector3Array
+        Vector3[] points = new Vector3[tPoints.Length];
+        for (int i = 0; i < tPoints.Length; i++)
+        {
+            points[i] = tPoints[i].position;
+        }
+
+        DrawCatmullRomProceduralSpline(points);
     }
 
     //TODO: REFACTOR THIS
