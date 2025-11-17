@@ -42,10 +42,10 @@ public class PGSSpline : MonoBehaviour
     public bool useTargetBend = true;
     public bool useEvenSpacing = true;
     public bool bendAway = true;
-    [Range(0f, 20f)] public float bendRadius = 5f;
-    [Range(0f, 5f)] public float bendStrength = 1f;
-    public Transform bendTarget;
-    private const float BEND_EPSILON = 0.001f;
+    [Range(1f, 20f)] public float bendRadius = 5f;
+    [Range(1f, 5f)] public float bendStrength = 1f;
+    public List<Transform> bendTargets = new List<Transform>();
+    private const float bendClamp = 0.01f; //Explain well
 
     private void Awake()
     {
@@ -133,27 +133,17 @@ public class PGSSpline : MonoBehaviour
 
             //LEARN: Target/Object Based Bending Logic
             Vector3 targetOffset = Vector3.zero;
-            if (useTargetBend && bendTarget != null) 
+            if (useTargetBend) 
             {
+                Vector3 basePos = onLine + curvatureOffset + spiralOffset + noiseOffset;
                 //ASK: basePose here adds up everything, so this means the bend should always be calculated last? Is this intended?
                 //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
-                Vector3 basePose = onLine + curvatureOffset + spiralOffset + noiseOffset;
-                Vector3 toTarget = bendTarget.position - basePose;
-                float distToTarget = toTarget.magnitude;
 
-                if (distToTarget < bendRadius) 
+                for (int i = 0; i < bendTargets.Count; i++)
                 {
-                    float safeDist = Mathf.Max(distToTarget, BEND_EPSILON);
-
-                    Vector3 dirToTarget = toTarget / safeDist;
-                    if(bendAway) dirToTarget = -dirToTarget;
-
-                    float bend = 1f - (distToTarget / bendRadius);
-                    float weight = bend * bend;
-
-                    weight *= arcWeightFactor;
-                    targetOffset = dirToTarget * bendStrength * weight;
+                    Transform tTarget = bendTargets[i];
+                    targetOffset += ComputeTargetBendOffset(basePos, tTarget, arcWeightFactor);
                 }
             }
 
@@ -277,7 +267,32 @@ public class PGSSpline : MonoBehaviour
             newPoints[j] = Vector3.Lerp(a, b, u);
         }
 
+        //Since this is catmull curve, passing the internal points will cause it to redistribute from p2 rather than p1. Caused spline to have 1 segment missing at A and B
+        Vector3 start = points[0]; //Old A
+        Vector3 end = points[pointCount - 1]; //Old B
+
         points = newPoints;
+
+        points[0] = start;
+        points[pointCount - 1] = end;
+    }
+
+    Vector3 ComputeTargetBendOffset(Vector3 basePos, Transform target, float arcWeightFactor) 
+    {
+        Vector3 toTarget = target.position - basePos;
+        float distToTarget = toTarget.magnitude;
+        if (distToTarget >= bendRadius) return Vector3.zero;
+
+        float safeDist = Mathf.Max(distToTarget, bendClamp);
+        Vector3 dirToTarget = toTarget / safeDist;
+        if (bendAway) dirToTarget = -dirToTarget;
+
+        float bend = 1f - (distToTarget / bendRadius); //LEARN
+        float weight = bend * bend;
+        weight *= arcWeightFactor;
+
+        return dirToTarget * bendStrength * weight;
+
     }
 
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
