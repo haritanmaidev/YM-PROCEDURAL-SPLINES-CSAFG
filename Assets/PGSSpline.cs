@@ -5,41 +5,62 @@ using UnityEngine;
 [RequireComponent(typeof(LineRenderer))]
 public class PGSSpline : MonoBehaviour
 {
+    private LineRenderer line;
+
     [Header("Manual Mode")]
     public Transform[] controlPoints;
 
     [Header("Procedural Mode Settings")]
     public Transform startPoint;
     public Transform endPoint;
-
-    //[Range(-20f, 20f)] public float curvature = 0f;
-    [Header("Catmull Rom Spline Settings")]
-    [Range(-20, 20f)] public float horizontalCurvature = 0f;
-    [Range(-20, 20f)] public float verticalCurvature = 0f;
-    [Range(2, 30)] public int splinePointCount = 4;
-    [Range(1, 5)] public int splineSegmentResolution = 1;
-    [Range(1, 3)] public float pathLengthMultiplier = 1f;
-    [Range(0, 5)] public float arcWeightInfluence = 1f;
-
-    [Header("Spiral Settings")]
-    public bool useSpiral = false;
-    [Range(0, 25f)] public float spiralRadius = 1f;
-    [Range(0, 10f)] public float spiralTurns = 1f;
-
     public bool useProceduralPoints = true;
     public Vector3[] generatedPoints;
 
-    private LineRenderer line;
+    [Header("Catmull Rom Spline Settings")]
+    [Range(2, 100)] public int splinePointCount = 4;
+    [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
+    [Range(1, 3)] public float splineLengthMultiplier = 1f;
 
+    [Header("Spline Curvature Settings")]
+    [Range(-10, 10f)] public float horizontalCurvature = 0f;
+    [Range(-10, 10f)] public float verticalCurvature = 0f;
+    [Range(0, 1)] public float CurvatureArcWeightInfluence = 1f;
+
+    [Header("Spiral Settings")]
+    public bool useSpiral = false;
+    [Range(0, 5f)] public float spiralRadius = 1f;
+    [Range(0, 10f)] public float spiralTurns = 1f;
+
+    [Header("Perlin Noise Settings")]
+    public bool usePerlinNoise = false;
+    public int seed = 11111;
+    [Range(0f, 5f)] public float noiseAmplitude = 1f;
+    [Range(0.1f, 10f)] public float noiseFrequency = 1f;
+    [Range(0f, 2f)] public float noiseVerticalBias = 1f;
+
+    [Header("Target Bend")]
+    public bool useTargetBend = false;
+    public bool bendAway = true;
+    [Range(0f, 20f)] public float bendRadius = 5f;
+    [Range(0f, 5f)] public float bendStrength = 1f;
+    public Transform bendTarget;
+
+    //FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.Say how I had an issue where I didn't do +1 to line.positionCount = totalSegments which lead to the last point not being drawn.
     //CHECK: is splinePointCount same as interalPointCount?
-    //TODO: Curvature now can determine only left and right curve arching. it should be able to go up and down as well
-    //TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline.
-    //Maybe expose where the peak weight should be, for more control
     //CHECK: Should we clamp curvature based on distance between A and B?
     //CONSIDER: Should I leave the pathLengthMultipier? I could just have the user place the start n end further.
-    //TODO: Add maximum distance limit between start and end points for procedural generation?
-    //FORUM: The +1 is necessary to include the last point of the spline in the LineRenderer.Say how I had an issue where I didn't do +1 to line.positionCount = totalSegments which lead to the last point not being drawn.
+    //CONSIDER: Segment resolution vs splinePointCount. Does splineCount * resolution lead to more internal points or just more segments between the same internal points?
+    //CONSIDER: Curvature now effects the whole spline, add option such that curvature effects from point to point? Which means by setting the point-point curvature, we should be able to achieve the same effect as now but when it comes to bending,
+    //this approach could be better because what if the object is at at dead center whic hwould mean that curve will be arcing at max weight + bend offset. even though we'd like a bend based on point-point around the target obj
+    //TODO: Arc factor weights the curvature whose weight at A and B = 0, mid point = 1. Spreads the effect of curvature along the spline. Maybe expose where the peak weight should be, for more control
     //TODO: Add Arc weight setting to control where curvature and spiral have more effect along the spline or whether arc should effect at all
+    //TODO: Add maximum distance limit between start and end points for procedural generation?
+    //TODO: If theres no target object or B, do generating points in the forward direction of A
+    //TODO: Coroutine showcasing gradual spline ge
+    //TODO: Make P0 and P3 part of internal points
+    //TODO: L Systems: Add variable to decide how much to avoid convering at B. From start to end point with branches converging at or diverging from the end point B, kinda like 1.Flowering-budding, 2.Snowflake 
+    //TODO: L Systems with no convergence at B and only use B as direction reference
+    //TODO: L Systems per internal point towards random/upward direction OR the same generation but with random intervals along spline points
 
     private void Awake()
     {
@@ -69,6 +90,7 @@ public class PGSSpline : MonoBehaviour
         Vector3 AB = B - A;
         Vector3 dir = AB.normalized;
         Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction (perpendicular to AB, using world up)  
+        Vector3 up = Vector3.Cross(side, dir).normalized;
         float distance = AB.magnitude;
 
         //Build array of points: A/Start + internal/spline points + B/End
@@ -78,7 +100,7 @@ public class PGSSpline : MonoBehaviour
         generatedPoints[totalPointsLength - 1] = B;
 
         //Extending the line AB based on pathLengthMultiplier
-        float extra = distance * (pathLengthMultiplier - 1f) * 0.5f;
+        float extra = distance * (splineLengthMultiplier - 1f) * 0.5f;
         Vector3 extendedA = A - dir * extra;
         Vector3 extendedB = B + dir * extra;
         float extendedDistance = (extendedB - extendedA).magnitude;
@@ -86,32 +108,73 @@ public class PGSSpline : MonoBehaviour
         //Positioning the internal spline points between A and B
         for (int p = 1; p <= totalPointsLength - 2; p++) 
         {
+            //Initial point position
             float t = p / (float)(totalPointsLength - 1);
             Vector3 onLine = extendedA + dir * (extendedDistance * t);
 
             //Curvature logic
-            float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * arcWeightInfluence;
+            float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * CurvatureArcWeightInfluence;
             Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (Vector3.up * verticalCurvature * arcWeightFactor);
 
             //Spiral logic
             Vector3 spiralOffset = Vector3.zero;
-
+            Vector3 radialDir = side;
             if (useSpiral)
             {
                 float angle = t * Mathf.PI * 2f * spiralTurns;
-                Vector3 raidialDir = (side * Mathf.Cos(angle)) + (Vector3.up * Mathf.Sin(angle));
+                radialDir = (side * Mathf.Cos(angle)) + (Vector3.up * Mathf.Sin(angle));
                 float radius = spiralRadius * arcWeightFactor; 
-                spiralOffset = raidialDir * radius;
+                spiralOffset = radialDir * radius;
             }
 
-            generatedPoints[p] = onLine + curvatureOffset + spiralOffset;
+            //Perlin Noise logic : REFACTOR TO COMPLETE NEW METHOD
+            Vector3 noiseOffset = Vector3.zero;
+            if (usePerlinNoise) 
+            {
+                Vector3 binormal = Vector3.Cross(dir, radialDir).normalized;
+
+                float baseNoise = t * noiseFrequency + seed * 0.123f;
+                float nSide = Mathf.PerlinNoise(baseNoise, 0f) ;
+                float nUp = Mathf.PerlinNoise(baseNoise, 37.17f);
+
+                float sideVal = (nSide - 0.5f) * 2f;
+                float upVal = (nUp - 0.5f) * 2f;
+
+                float radius = noiseAmplitude * arcWeightFactor;
+                float sidewayNoise = noiseAmplitude * arcWeightFactor * noiseVerticalBias;
+
+                noiseOffset = (side * sideVal * radius) + (binormal* upVal * radius);
+            }
+
+            //Target/Object Based Bending Logic
+            Vector3 targetOffset = Vector3.zero;
+            if (useTargetBend && bendTarget != null) 
+            {
+                Vector3 basePose = onLine + curvatureOffset + spiralOffset + noiseOffset;
+                Vector3 toTarget = bendTarget.position - basePose;
+                float distToTarget = toTarget.magnitude;
+
+                if (distToTarget < bendRadius) 
+                {
+                    Vector3 dirToTarget = toTarget.normalized;
+                    if(bendAway) dirToTarget = -dirToTarget;
+
+                    float bend = 1f - (distToTarget / bendRadius);
+                    float weight = bend * bend;
+
+                    weight *= arcWeightFactor;
+                    targetOffset = dirToTarget * bendStrength * weight;
+                }
+            }
+
+            generatedPoints[p] = onLine + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
         }
     }
 
     private void DrawCatmullRomProceduralSpline(Vector3[] points)
     {
         int totalCatmullCurves = points.Length - 3;
-        int totalSegments = totalCatmullCurves * splineSegmentResolution;
+        int totalSegments = totalCatmullCurves * segmentResolution;
         line.positionCount = totalSegments + 1;
 
         //Iterating through points and storing positions of each point per each curve segment 
@@ -124,9 +187,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p3 = points[i + 3];
 
             //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
-            for (int s = 0; s < splineSegmentResolution; s++)
+            for (int s = 0; s < segmentResolution; s++)
             {
-                float t = s / (float)splineSegmentResolution;
+                float t = s / (float)segmentResolution;
                 line.SetPosition(index, CatmullRom(p0, p1, p2, p3, t));
                 index++;
             }
@@ -164,6 +227,7 @@ public class PGSSpline : MonoBehaviour
                        (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
     }
 
+    //TODO: REFACTOR THIS
     private void OnDrawGizmos()
     {
         // Decide which set of points to visualize
@@ -218,8 +282,7 @@ public class PGSSpline : MonoBehaviour
         //Spline Color
         Gizmos.color = Color.white;
         int numCurves = pts.Length - 3;
-        if (numCurves <= 0)
-            return;
+        if (numCurves <= 0) return;
 
         Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
 
@@ -230,9 +293,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p2 = pts[i + 2];
             Vector3 p3 = pts[i + 3];
 
-            for (int s = 1; s <= splineSegmentResolution; s++)
+            for (int s = 1; s <= segmentResolution; s++)
             {
-                float t = s / (float)splineSegmentResolution;
+                float t = s / (float)segmentResolution;
                 Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
 
                 Gizmos.DrawLine(previousPos, pos);

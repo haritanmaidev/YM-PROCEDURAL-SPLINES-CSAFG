@@ -518,7 +518,7 @@ Transform:
   m_GameObject: {fileID: 410087039}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: 0, y: 8.57, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -698,7 +698,7 @@ Transform:
   m_GameObject: {fileID: 956261252}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 5.23, y: -0.629, z: -0.19}
+  m_LocalPosition: {x: 6.69, y: -0.629, z: 0.01}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -847,7 +847,7 @@ Transform:
   m_GameObject: {fileID: 1054456473}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.629, z: -0}
+  m_LocalPosition: {x: 0, y: 0.629, z: 1.514}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -879,32 +879,49 @@ MonoBehaviour:
   - {fileID: 163256742}
   startPoint: {fileID: 26011631}
   endPoint: {fileID: 956261256}
-  horizontalCurvature: 4
-  verticalCurvature: 0.9
-  splinePointCount: 17
-  splineSegmentResolution: 1
-  pathLengthMultiplier: 1
   useProceduralPoints: 1
   generatedPoints:
-  - {x: -5.587, y: 0, z: 2.739}
-  - {x: -4.804513, y: 0.15628336, z: 3.2467265}
-  - {x: -4.027542, y: 0.30781814, z: 3.7340817}
-  - {x: -3.261436, y: 0.45, z: 4.1813135}
-  - {x: -2.5112128, y: 0.57850885, z: 4.569888}
-  - {x: -1.7814081, y: 0.68944, z: 4.8830557}
-  - {x: -1.0759374, y: 0.7794229, z: 5.106356}
-  - {x: -0.3979771, y: 0.8457234, z: 5.2280602}
-  - {x: 0.2501335, y: 0.88632697, z: 5.239526}
-  - {x: 0.8669609, y: 0.9, z: 5.13546}
-  - {x: 1.4520224, y: 0.8863269, z: 4.9140806}
-  - {x: 2.0058005, y: 0.84572333, z: 4.577171}
-  - {x: 2.5297291, y: 0.7794228, z: 4.1300225}
-  - {x: 3.0261471, y: 0.68943995, z: 3.581278}
-  - {x: 3.4982307, y: 0.5785087, z: 2.9426653}
-  - {x: 3.9498966, y: 0.45000005, z: 2.2286468}
-  - {x: 4.3856792, y: 0.307818, z: 1.4559699}
-  - {x: 4.8105965, y: 0.15628347, z: 0.6431716}
-  - {x: 5.23, y: 0, z: -0.19}
+  - {x: -5.587, y: 0, z: 4.2530003}
+  - {x: -4.9441676, y: 0.044712685, z: 4.384932}
+  - {x: -4.302636, y: 0.08842656, z: 4.5110135}
+  - {x: -3.663676, y: 0.13016513, z: 4.625526}
+  - {x: -3.0285017, y: 0.16899604, z: 4.723008}
+  - {x: -2.3982422, y: 0.20405185, z: 4.798379}
+  - {x: -1.773917, y: 0.23454946, z: 4.8470526}
+  - {x: -1.1564131, y: 0.25980765, z: 4.865038}
+  - {x: -0.546466, y: 0.27926213, z: 4.849032}
+  - {x: 0.055360198, y: 0.29247838, z: 4.7964873}
+  - {x: 0.6486793, y: 0.29916117, z: 4.705676}
+  - {x: 1.2332993, y: 0.29916114, z: 4.5757236}
+  - {x: 1.8092173, y: 0.29247838, z: 4.40663}
+  - {x: 2.37663, y: 0.27926213, z: 4.1992693}
+  - {x: 2.9359207, y: 0.25980762, z: 3.9553714}
+  - {x: 3.4876547, y: 0.23454942, z: 3.6774807}
+  - {x: 4.0325675, y: 0.20405181, z: 3.3689024}
+  - {x: 4.5715466, y: 0.16899602, z: 3.0336266}
+  - {x: 5.1056104, y: 0.13016509, z: 2.6762397}
+  - {x: 5.635888, y: 0.088426545, z: 2.3018231}
+  - {x: 6.163594, y: 0.044712625, z: 1.9158363}
+  - {x: 6.69, y: 0, z: 1.524}
+  splinePointCount: 20
+  segmentResolution: 1
+  pathLengthMultiplier: 1
+  horizontalCurvature: 1.8
+  verticalCurvature: 0.3
+  CurvatureArcWeightInfluence: 1
+  useSpiral: 0
+  spiralRadius: 0.25
+  spiralTurns: 10
+  usePerlinNoise: 0
+  seed: 205
+  noiseAmplitude: 1.32
+  noiseFrequency: 10
+  noiseVerticalBias: 0.43
+  useTargetBend: 0
+  bendAway: 0
+  bendRadius: 5
+  bendStrength: 1
+  bendTarget: {fileID: 0}
 --- !u!1 &1121811299
 GameObject:
   m_ObjectHideFlags: 0
