@@ -22,12 +22,22 @@ public class PGSSpline : MonoBehaviour
     [Range(0, 1)] public float curvatureArcWeightInfluence = 1f;
 
     [Header("Spiral Settings")]
-    public bool useSpiral = false;
-    [Range(0, 5f)] public float spiralRadius = 1f;
-    [Range(0, 10f)] public float spiralTurns = 1f;
+    public bool enableSpiral = false;
+    [Range(0f, 5f)] public float spiralRadius = 1f;
+    [Range(0f, 10f)] public float spiralTurns = 1f;
+
+    [Header("Perlin Noise Settings")]
+    public bool enableNoise = false;
+    [Range(0.01f, 20f)] public float noiseAmplitude = 1f;
+    [Range(0.001f, 1f)] public float noiseFrequency = 1f;
+    [Range(-100f, 100f)] public float noiseOffsetX = 0f;
+    [Range(-100f, 100f)] public float noiseOffsetY = 0f;
+    [Range(1, 3)] public int octaves = 0;
+    [Range(0.25f, 10f)] public float exponent = 1f; //0.25 because anything below that is barely noticable
+    private float lacuarity;
 
     [Header("Target Bend")]
-    public bool useTargetBend = true;
+    public bool enableBending = true;
     public bool useEvenSpacing = true;
     public bool bendAway = true;
     [Range(1f, 20f)] public float bendRadius = 5f;
@@ -39,6 +49,11 @@ public class PGSSpline : MonoBehaviour
     public LayerMask bendLayer = 3;
     public int maxPhysicsTargetsPerPoint = 4;
 
+    [Header("Gizmos Settings")]
+    [Range(0.1f, 1f)] public float gizmoAxesLength = 1f;
+    [Range(0.01f, 1f)] public float gizmoSphereRadius = 0.065f;
+
+    //TODO: User can manually decide which 
     //FIX: CURVE WEIGHT ARC NEEDS TO BE FIXED, IT EFFECTS THINGS OUTSIDE CURVATURE SECTION
 
     private void Awake()
@@ -79,15 +94,15 @@ public class PGSSpline : MonoBehaviour
         {
             //Initial point position
             float t = p / (float)(totalPointsLength - 1);
-            Vector3 pointPosOnSpline = extendedA + dir * (extendedDistance * t);
+            Vector3 currentPoint = extendedA + dir * (extendedDistance * t);
 
             //Curvature logic
             float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * curvatureArcWeightInfluence; //Sin90 = 0
             Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (Vector3.up * verticalCurvature * arcWeightFactor);
 
-            //Spiral logic
+            //Spiral Logic
             Vector3 spiralOffset = Vector3.zero;
-            if (useSpiral)
+            if (enableSpiral)
             {
                 Vector3 radialDir = side;
                 float angle = t * Mathf.PI * 2f * spiralTurns;
@@ -96,14 +111,23 @@ public class PGSSpline : MonoBehaviour
                 spiralOffset = radialDir * radius;
             }
 
+            //Perlin Noise Logic
+            Vector3 noiseOffset = Vector3.zero;
+            if (enableNoise) 
+            {
+                float noise = Mathf.PerlinNoise(currentPoint.x * noiseFrequency + noiseOffsetX, currentPoint.y * noiseFrequency + noiseOffsetY) * noiseAmplitude;
+                noiseOffset.x = noise;
+                noiseOffset.y = noise;
+            }
+
             //Object Avoid/Attract Logic
             Vector3 targetOffset = Vector3.zero;
-            if (useTargetBend) 
+            if (enableBending) 
             {
-                Vector3 basePos = pointPosOnSpline + curvatureOffset + spiralOffset;
                 //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
 
+                Vector3 basePos = currentPoint + curvatureOffset + spiralOffset + noiseOffset;
                 if (usePhysicsTargets) 
                 {
                     Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
@@ -118,7 +142,7 @@ public class PGSSpline : MonoBehaviour
                 }
             }
 
-            generatedPoints[p] = pointPosOnSpline + curvatureOffset + spiralOffset + targetOffset;
+            generatedPoints[p] = currentPoint + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
         }
 
         if (useEvenSpacing && generatedPoints != null)
@@ -281,36 +305,35 @@ public class PGSSpline : MonoBehaviour
         Vector3[] pts = null;
 
         GenerateControlPointsFromAtoB();
-
         pts = generatedPoints;
         
-        //Draw spheres at control points
+        //DRAW SPHERES AT EACH POINT
         Gizmos.color = Color.yellow;
-        float sphereRadius = 0.065f;
+        
 
         for (int i = 0; i < pts.Length; i++)
         {
-            Gizmos.DrawSphere(pts[i], sphereRadius);
+            Gizmos.DrawSphere(pts[i], gizmoSphereRadius);
         }
 
         Gizmos.color = Color.red; 
-        Gizmos.DrawSphere(pts[0], sphereRadius * 1.2f);   // p0
+        Gizmos.DrawSphere(pts[0], gizmoSphereRadius * 1.5f);   // p0
         Gizmos.color = Color.green; 
-        Gizmos.DrawSphere(pts[1], sphereRadius * 1.2f);   // p1
+        Gizmos.DrawSphere(pts[1], gizmoSphereRadius * 1.2f);   // p1
         int lastP = pts.Length - 2;
         Gizmos.color = Color.green; 
-        Gizmos.DrawSphere(pts[lastP], sphereRadius * 1.2f);   // pN - 2
+        Gizmos.DrawSphere(pts[lastP], gizmoSphereRadius * 1.2f);   // pN - 2
         int endP = pts.Length - 1;
         Gizmos.color = Color.red; 
-        Gizmos.DrawSphere(pts[endP], sphereRadius * 1.2f);   // pN - 1
+        Gizmos.DrawSphere(pts[endP], gizmoSphereRadius * 1.5f);   // pN - 1
 
         //Spline Color
         Gizmos.color = Color.white;
         int numCurves = pts.Length - 3;
         if (numCurves <= 0) return;
 
+        //DRAW LINE BETWEEN POINTS
         Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
-
         for (int i = 0; i < numCurves; i++)
         {
             Vector3 p0 = pts[i];
@@ -326,6 +349,24 @@ public class PGSSpline : MonoBehaviour
                 Gizmos.DrawLine(previousPos, pos);
                 previousPos = pos;
             }
+        }
+
+        //DRAW POINTS XYZ AXES
+        for (int i = 0; i < pts.Length; i++) 
+        {
+            Vector3 currentPoint = pts[i]; 
+            Vector3 xDir = new Vector3(currentPoint.x + gizmoAxesLength, currentPoint.y, currentPoint.z);
+            Vector3 yDir = new Vector3(currentPoint.x, currentPoint.y + gizmoAxesLength, currentPoint.z);
+            Vector3 zDir = new Vector3(currentPoint.x, currentPoint.y, currentPoint.z + gizmoAxesLength);
+            
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(currentPoint, xDir);
+
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(currentPoint, yDir);
+
+            Gizmos.color = Color.blue;
+            Gizmos.DrawLine(currentPoint, zDir);
         }
     }
 }
