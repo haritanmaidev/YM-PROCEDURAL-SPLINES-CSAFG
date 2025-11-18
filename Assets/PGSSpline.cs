@@ -15,7 +15,6 @@ public class PGSSpline : MonoBehaviour
     [Range(2, 100)] public int splinePointCount = 4;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
-    const int denseSamplesPerCurve = 32; // good default
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
@@ -26,12 +25,6 @@ public class PGSSpline : MonoBehaviour
     public bool useSpiral = false;
     [Range(0, 5f)] public float spiralRadius = 1f;
     [Range(0, 10f)] public float spiralTurns = 1f;
-
-    [Header("Perlin Noise Settings")]
-    public bool usePerlinNoise = false;
-    public int seed = 11111;
-    [Range(0f, 5f)] public float noiseAmplitude = 1f;
-    [Range(0.1f, 10f)] public float noiseFrequency = 1f;
 
     [Header("Target Bend")]
     public bool useTargetBend = true;
@@ -56,14 +49,11 @@ public class PGSSpline : MonoBehaviour
     private void Update()
     {
         GenerateControlPointsFromAtoB();
-        DrawCatmullRomProceduralSpline(generatedPoints);
+        DrawLineOnCatmullRomProceduralSpline(generatedPoints);
     }
 
     private void GenerateControlPointsFromAtoB()
     {
-        if (startPoint == null || endPoint == null)
-            return;
-
         Vector3 A = startPoint.position;
         Vector3 B = endPoint.position;
         Vector3 AB = B - A;
@@ -106,30 +96,11 @@ public class PGSSpline : MonoBehaviour
                 spiralOffset = radialDir * radius;
             }
 
-            //Perlin Noise logic : REFACTOR TO COMPLETE NEW METHOD
-            Vector3 noiseOffset = Vector3.zero;
-            if (usePerlinNoise) 
-            {
-                Vector3 binormal = Vector3.Cross(dir, radialDir).normalized;
-
-                float baseNoise = t * noiseFrequency + seed * 0.123f;
-                float nSide = Mathf.PerlinNoise(baseNoise, 0f) ;
-                float nUp = Mathf.PerlinNoise(baseNoise, 37.17f);
-
-                float sideVal = (nSide - 0.5f) * 2f;
-                float upVal = (nUp - 0.5f) * 2f;
-
-                float radius = noiseAmplitude * arcWeightFactor;
-                float sidewayNoise = noiseAmplitude * arcWeightFactor;
-
-                noiseOffset = (side * sideVal * radius) + (binormal* upVal * radius);
-            }
-
             //LEARN: Target/Object Based Bending Logic
             Vector3 targetOffset = Vector3.zero;
             if (useTargetBend) 
             {
-                Vector3 basePos = onLine + curvatureOffset + spiralOffset + noiseOffset;
+                Vector3 basePos = onLine + curvatureOffset + spiralOffset;
                 //ASK: basePose here adds up everything, so this means the bend should always be calculated last? Is this intended?
                 //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
@@ -149,7 +120,7 @@ public class PGSSpline : MonoBehaviour
                 }
             }
 
-            generatedPoints[p] = onLine + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
+            generatedPoints[p] = onLine + curvatureOffset + spiralOffset + targetOffset;
         }
 
         if (useEvenSpacing && generatedPoints != null)
@@ -158,7 +129,7 @@ public class PGSSpline : MonoBehaviour
         }
     }
 
-    private void DrawCatmullRomProceduralSpline(Vector3[] points)
+    private void DrawLineOnCatmullRomProceduralSpline(Vector3[] points)
     {
         int totalCatmullCurves = points.Length - 3;
         int totalSegments = totalCatmullCurves * segmentResolution;
