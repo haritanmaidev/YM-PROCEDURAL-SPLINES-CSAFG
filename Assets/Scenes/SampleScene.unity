@@ -221,7 +221,7 @@ Transform:
   m_GameObject: {fileID: 26011627}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -5.587, y: 0, z: 0}
+  m_LocalPosition: {x: -5.587, y: 0, z: 4.49}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -575,7 +575,7 @@ Transform:
   m_GameObject: {fileID: 654233877}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.98, y: 0, z: -0.23}
+  m_LocalPosition: {x: 2.98, y: 0, z: -0.83}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -806,7 +806,7 @@ Transform:
   m_GameObject: {fileID: 956261252}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 10, y: 0, z: 0}
+  m_LocalPosition: {x: 10, y: 0, z: 5.45}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -987,57 +987,53 @@ MonoBehaviour:
   startPoint: {fileID: 26011631}
   endPoint: {fileID: 956261256}
   generatedPoints:
-  - {x: -5.587, y: 1.987, z: 2.288}
-  - {x: -4.5700865, y: 1.987, z: 2.2878585}
-  - {x: -4.0412045, y: 1.987, z: 2.3005862}
-  - {x: -3.5215516, y: 1.9870002, z: 2.4015477}
-  - {x: -3.0921547, y: 1.987, z: 2.60603}
-  - {x: -2.640999, y: 1.987, z: 2.396494}
-  - {x: -2.1125731, y: 1.9870001, z: 2.3659472}
-  - {x: -1.7628351, y: 1.9870001, z: 2.6633832}
-  - {x: -1.4063015, y: 1.9870001, z: 2.9351823}
-  - {x: -0.8783597, y: 1.9870001, z: 2.9698112}
-  - {x: -0.3507226, y: 1.9870001, z: 3.0178201}
-  - {x: 0.17085999, y: 1.9870001, z: 3.1009002}
-  - {x: 0.2233079, y: 1.9870001, z: 2.639742}
-  - {x: 0.5665758, y: 1.987, z: 2.3391771}
-  - {x: 1.094818, y: 1.9870002, z: 2.30058}
-  - {x: 1.6238748, y: 1.9870001, z: 2.2871258}
-  - {x: 2.1536863, y: 1.9870001, z: 2.2877746}
-  - {x: 2.6835074, y: 1.987, z: 2.288}
-  - {x: 3.2133296, y: 1.9870001, z: 2.288}
-  - {x: 3.5300593, y: 1.987, z: 2.288}
-  - {x: 3.3362408, y: 1.9870186, z: 2.2879832}
-  - {x: 3.8659697, y: 1.9935558, z: 2.2819612}
-  - {x: 4.3928404, y: 1.9646331, z: 2.3165102}
-  - {x: 4.8973145, y: 1.8330673, z: 2.3912227}
-  - {x: 5.3716197, y: 1.6126003, z: 2.3833225}
-  - {x: 5.8390803, y: 1.8171084, z: 2.3626587}
-  - {x: 6.337187, y: 1.9668136, z: 2.3223572}
-  - {x: 6.863832, y: 1.9906341, z: 2.284713}
-  - {x: 7.393584, y: 1.9870669, z: 2.2879214}
-  - {x: 7.9234023, y: 1.9870001, z: 2.288}
-  - {x: 8.453225, y: 1.9870001, z: 2.288}
-  - {x: 8.983064, y: 1.9870002, z: 2.288}
-  - {x: 10, y: 1.987, z: 2.288}
+  - {x: -5.587, y: 1.987, z: 6.778}
+  - {x: -4.6432576, y: 1.9870002, z: 6.836124}
+  - {x: -4.1866093, y: 1.9870002, z: 6.8642497}
+  - {x: -3.7299612, y: 1.9870001, z: 6.8923736}
+  - {x: -3.273313, y: 1.9870001, z: 6.9205}
+  - {x: -2.816665, y: 1.9870001, z: 6.948625}
+  - {x: -2.3600166, y: 1.9870001, z: 6.9767494}
+  - {x: -1.9033679, y: 1.9870001, z: 7.0048738}
+  - {x: -1.4467182, y: 1.987, z: 7.032999}
+  - {x: -0.99006873, y: 1.987, z: 7.061124}
+  - {x: -0.53342426, y: 1.987, z: 7.0892487}
+  - {x: -0.07678031, y: 1.987, z: 7.117373}
+  - {x: 0.37986344, y: 1.987, z: 7.145498}
+  - {x: 0.836507, y: 1.987, z: 7.173622}
+  - {x: 1.2931547, y: 1.987, z: 7.201747}
+  - {x: 1.7498028, y: 1.987, z: 7.2298717}
+  - {x: 2.2064521, y: 1.9870002, z: 7.2579956}
+  - {x: 2.6631038, y: 1.9870002, z: 7.286122}
+  - {x: 3.1197581, y: 1.9870002, z: 7.3142467}
+  - {x: 3.5764136, y: 1.9870001, z: 7.342372}
+  - {x: 4.03307, y: 1.9870001, z: 7.3704977}
+  - {x: 4.489724, y: 1.9870001, z: 7.398623}
+  - {x: 4.946376, y: 1.9870001, z: 7.4267483}
+  - {x: 5.403028, y: 1.9870001, z: 7.454873}
+  - {x: 5.8596797, y: 1.987, z: 7.4829984}
+  - {x: 6.3163304, y: 1.987, z: 7.5111237}
+  - {x: 6.7729826, y: 1.987, z: 7.5392485}
+  - {x: 7.2296343, y: 1.987, z: 7.5673738}
+  - {x: 7.686287, y: 1.987, z: 7.595499}
+  - {x: 8.14294, y: 1.987, z: 7.623624}
+  - {x: 8.599594, y: 1.987, z: 7.651749}
+  - {x: 9.05625, y: 1.987, z: 7.6798744}
+  - {x: 10, y: 1.987, z: 7.738}
   splinePointCount: 31
   segmentResolution: 1
   splineLengthMultiplier: 1
   horizontalCurvature: 0
   verticalCurvature: 0
-  CurvatureArcWeightInfluence: 1
+  curvatureArcWeightInfluence: 1
   useSpiral: 0
   spiralRadius: 1.32
   spiralTurns: 8.1
-  usePerlinNoise: 0
-  seed: 205
-  noiseAmplitude: 5
-  noiseFrequency: 10
-  useTargetBend: 1
+  useTargetBend: 0
   useEvenSpacing: 1
-  bendAway: 0
-  bendRadius: 1
-  bendStrength: 1
+  bendAway: 1
+  bendRadius: 11.5
+  bendStrength: 3.12
   usePhysicsTargets: 1
   bendLayer:
     serializedVersion: 2
@@ -1102,7 +1098,7 @@ Transform:
   m_GameObject: {fileID: 1190128370}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.72, y: 0, z: 1.278}
+  m_LocalPosition: {x: 0.011, y: -1.354, z: 0.035}
   m_LocalScale: {x: 2.3877, y: 2.3877, z: 2.3877}
   m_ConstrainProportionsScale: 1
   m_Children: []
