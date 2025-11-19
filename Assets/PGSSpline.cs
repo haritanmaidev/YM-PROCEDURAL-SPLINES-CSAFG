@@ -6,15 +6,16 @@ public class PGSSpline : MonoBehaviour
 {
     private LineRenderer line;
 
-    [Header("Procedural Mode Settings")]
-    public Transform startPoint;
-    public Transform endPoint;
-    public Vector3[] generatedPoints;
-
     [Header("Catmull Rom Spline Settings")]
-    [Range(2, 100)] public int splinePointCount = 4;
+    public Transform[] handles;
+    public bool loopedSpline;
+    [Range(2, 200)] public int totalSplinePoints = 20;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
+    public bool limitSplineDistance = false;
+    [Range(1, 100f)] public float maxSplineDistance = 10f;
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
+
+    public Vector3[] generatedPoints;
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
@@ -67,28 +68,48 @@ public class PGSSpline : MonoBehaviour
 
     private void Update()
     {
-        GenerateControlPointsFromAtoB();
-        DrawLineOnCatmullRomProceduralSpline(generatedPoints);
+        BuildSplineFromHandles();
+        DrawLineOnCatmullRomProceduralSpline(generatedPoints); 
+        //NOTE: NO NULL CHECK HERE BECAUSE POINTS WILL ALWAYS BE MORE THAN 4
     }
 
-    private void GenerateControlPointsFromAtoB()
+    private void BuildSplineFromHandles() 
     {
-        Vector3 A = startPoint.position;
-        Vector3 B = endPoint.position;
+        if (handles == null || handles.Length < 2) return;
+
+        Vector3 A = handles[0].position;
+        Vector3 B = handles[1].position;
+
+        generatedPoints = GenerateControlPointsFromAtoB(A, B, totalSplinePoints);
+
+        if (enableBending && useEvenSpacing && generatedPoints != null) 
+        {
+            RedistributePointsEvenlyAlongCurve(ref generatedPoints);
+        }
+    }
+
+    private Vector3[] GenerateControlPointsFromAtoB(Vector3 A, Vector3 B, int internalPointCount)
+    {
         Vector3 AB = B - A;
         Vector3 dir = AB.normalized;
         Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction  
         Vector3 up = Vector3.Cross(side, dir).normalized; //Local up per point
         float distance = AB.magnitude;
+
         //To fix the bending becomes upon intersecting with a target object bug
         currentDir = dir;
         currentSide = side;
 
         //Build array of points: A/Start + internal/spline points + B/End
-        int totalPointsLength = splinePointCount + 2;  
-        generatedPoints = new Vector3[totalPointsLength];
-        generatedPoints[0] = A;
-        generatedPoints[totalPointsLength - 1] = B;
+        int totalPointsLength = totalSplinePoints + 2;
+        Vector3[] points = new Vector3[totalPointsLength];
+        points[0] = A;
+        points[totalPointsLength - 1] = B;
+
+        //WHY
+        //generatedPoints = new Vector3[totalPointsLength];
+        //generatedPoints[0] = A;
+        //generatedPoints[totalPointsLength - 1] = B;
 
         //Extending the line AB based on pathLengthMultiplier
         float extra = distance * (splineLengthMultiplier - 1f) * 0.5f;
@@ -96,18 +117,19 @@ public class PGSSpline : MonoBehaviour
         Vector3 extendedB = B + dir * extra;
         float extendedDistance = (extendedB - extendedA).magnitude;
 
-        //Positioning the internal spline points between A and B
+        //Positioning the internal spline points between A and B. -2 to get the catmull rom based point not the actua final point
         for (int p = 1; p <= totalPointsLength - 2; p++) 
         {
-            //Initial point position
+            //INTIAL POSITION OF THE POINT
             float t = p / (float)(totalPointsLength - 1);
-            Vector3 currentPoint = extendedA + dir * (extendedDistance * t);
+            Vector3 currentPointOnLine = extendedA + dir * (extendedDistance * t);
 
-            //Curvature logic
+            //CURVATURE LOGIC
             float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * curvatureArcWeightInfluence; //Sin90 = 0
             Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (Vector3.up * verticalCurvature * arcWeightFactor);
+            //WHY: should I use the splines up instead of vector up here?
 
-            //Spiral Logic
+            //SPIRAL LOGIC
             Vector3 spiralOffset = Vector3.zero;
             if (enableSpiral)
             {
@@ -118,44 +140,42 @@ public class PGSSpline : MonoBehaviour
                 spiralOffset = radialDir * radius;
             }
 
-            //Perlin Noise Logic
+            //PERLIN NOISE LOGIC
             Vector3 noiseOffset = Vector3.zero;
             if (enableNoise) 
             {
-                float noise = Mathf.PerlinNoise(currentPoint.x * noiseFrequency + noiseOffsetX, currentPoint.y * noiseFrequency + noiseOffsetY) * noiseAmplitude;
+                float noise = Mathf.PerlinNoise(currentPointOnLine.x * noiseFrequency + noiseOffsetX, currentPointOnLine.y * noiseFrequency + noiseOffsetY) * noiseAmplitude;
                 noiseOffset.x = noise;
                 noiseOffset.y = noise;
             }
 
-            //Object Avoid/Attract Logic
+            //Final offset position before bending logic
+            Vector3 basePos = currentPointOnLine + curvatureOffset + spiralOffset + noiseOffset;
+
+            //BENDING TO AVOID OR BE ATTRACTED LOGIC
             Vector3 targetOffset = Vector3.zero;
             if (enableBending) 
             {
                 //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
 
-                Vector3 basePos = currentPoint + curvatureOffset + spiralOffset + noiseOffset;
                 Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
-
                 int maxCollisions = Mathf.Min(cols.Length, maxPhysicsTargetsPerPoint); //Max objects influecing the spline
+
                 for (int i = 0; i < maxCollisions; i++)
                 {
                     Collider currentCol = cols[i];
-
-                    targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcWeightFactor);
+                    targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcWeightFactor, A, B);
                 }
             }
 
-            generatedPoints[p] = currentPoint + curvatureOffset + spiralOffset + noiseOffset + targetOffset;
+            points[p] = basePos + targetOffset;
         }
 
-        if (useEvenSpacing && generatedPoints != null)
-        {
-            RedistributePointsEvenlyAlongCurve(ref generatedPoints);
-        }
+        return points;
     }
 
-    Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor)
+    Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor, Vector3 A, Vector3 B)
     {
         if (col == null) 
         {
@@ -169,8 +189,9 @@ public class PGSSpline : MonoBehaviour
         float distanceToTarget = toTarget.magnitude;
         if (distanceToTarget >= bendRadius) return Vector3.zero;
 
-        //Choose bend direction
+        //Choosing bend direction
         Vector3 bendDir;
+
         //Case 1: Collider is not intersecting the spline
         if (distanceToTarget > bendClamp)
         {
@@ -179,16 +200,13 @@ public class PGSSpline : MonoBehaviour
         //Case 2: Object colider intersects the AB line, so force a sideways bend dir based on which side the object came from
         else 
         {
-            Vector3 ABdir = (endPoint.position - startPoint.position).normalized;
-
+            Vector3 ABdir = (B - A).normalized;
             Vector3 objCenter = col.bounds.center;
-            Vector3 A = startPoint.position;
-
+            //WHAT:
             float t = Vector3.Dot(objCenter - A, ABdir);
             Vector3 linePoint = A + ABdir * t;
-
             Vector3 fromLine = objCenter - linePoint;
-
+            if (fromLine.sqrMagnitude < 0.0001f) fromLine = Vector3.Cross(ABdir, Vector3.up);
             bendDir = fromLine.normalized;
         }
 
@@ -332,10 +350,9 @@ public class PGSSpline : MonoBehaviour
     private void OnDrawGizmos()
     {
         // Decide which set of points to visualize
-        Vector3[] pts = null;
 
-        GenerateControlPointsFromAtoB();
-        pts = generatedPoints;
+        BuildSplineFromHandles();
+        Vector3[] pts = generatedPoints;
 
         //DRAW LINE BETWEEN POINTS
         Gizmos.color = Color.white;
