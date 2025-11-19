@@ -36,25 +36,29 @@ public class PGSSpline : MonoBehaviour
     [Range(0.25f, 10f)] public float exponent = 1f; //0.25 because anything below that is barely noticable
     private float lacuarity;
 
-    [Header("Target Bend")]
+    [Header("Bend Setting")]
     public bool enableBending = true;
     public bool useEvenSpacing = true;
     public bool bendAway = true;
+    public LayerMask bendLayer = 3;
     [Range(1f, 20f)] public float bendRadius = 5f;
     [Range(1f, 5f)] public float bendStrength = 1f;
-    private const float bendClamp = 0.01f; //Explain well
-
-    [Header("Physics Targets")]
-    public bool usePhysicsTargets = false;
-    public LayerMask bendLayer = 3;
     public int maxPhysicsTargetsPerPoint = 4;
+    private const float bendClamp = 0.01f; //Explain well
+    private float lastBendSide = 1f;
+    private bool hasLastBendSide = false;
+    private Vector3 currentSide = Vector3.right;
+    private Vector3 currentDir = Vector3.forward;
 
     [Header("Gizmos Settings")]
+    public bool enableGizmoAxes = false;
     [Range(0.1f, 1f)] public float gizmoAxesLength = 1f;
-    [Range(0.01f, 1f)] public float gizmoSphereRadius = 0.065f;
+    public bool enableGizmoPoints = false;
+    [Range(0.01f, 0.1f)] public float gizmoSphereRadius = 0.065f;
 
     //TODO: User can manually decide which 
     //FIX: CURVE WEIGHT ARC NEEDS TO BE FIXED, IT EFFECTS THINGS OUTSIDE CURVATURE SECTION
+    //CONSIDER: Objects that will always attract or repel
 
     private void Awake()
     {
@@ -76,6 +80,9 @@ public class PGSSpline : MonoBehaviour
         Vector3 side = Vector3.Cross(dir, Vector3.up).normalized;  // Sideways direction  
         Vector3 up = Vector3.Cross(side, dir).normalized; //Local up per point
         float distance = AB.magnitude;
+        //To fix the bending becomes upon intersecting with a target object bug
+        currentDir = dir;
+        currentSide = side;
 
         //Build array of points: A/Start + internal/spline points + B/End
         int totalPointsLength = splinePointCount + 2;  
@@ -128,17 +135,14 @@ public class PGSSpline : MonoBehaviour
                 //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
 
                 Vector3 basePos = currentPoint + curvatureOffset + spiralOffset + noiseOffset;
-                if (usePhysicsTargets) 
+                Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
+
+                int maxCollisions = Mathf.Min(cols.Length, maxPhysicsTargetsPerPoint); //Max objects influecing the spline
+                for (int i = 0; i < maxCollisions; i++)
                 {
-                    Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
+                    Collider currentCol = cols[i];
 
-                    int maxCollisions = Mathf.Min(cols.Length, maxPhysicsTargetsPerPoint); //Max objects influecing the spline
-                    for (int i = 0; i < maxCollisions; i++) 
-                    {
-                        Collider currentCol = cols[i];
-
-                        targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcWeightFactor);
-                    }
+                    targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcWeightFactor);
                 }
             }
 
@@ -153,20 +157,47 @@ public class PGSSpline : MonoBehaviour
 
     Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor)
     {
+        if (col == null) 
+        {
+            Debug.LogWarning("Collider passed into ComputeColliderBendOffset is null!");
+            return Vector3.zero;
+        }
+
+        //Gets closest point on object's surface
         Vector3 closest = col.ClosestPoint(splinePoint);
         Vector3 toTarget = closest - splinePoint;
         float distanceToTarget = toTarget.magnitude;
         if (distanceToTarget >= bendRadius) return Vector3.zero;
 
-        float safeDist = Mathf.Max(distanceToTarget, bendClamp);
-        Vector3 dirToTarget = toTarget / safeDist;
-        if (bendAway) dirToTarget = -dirToTarget;
+        //Choose bend direction
+        Vector3 bendDir;
+        //Case 1: Collider is not intersecting the spline
+        if (distanceToTarget > bendClamp)
+        {
+            bendDir = toTarget / distanceToTarget;
+        }
+        //Case 2: Object colider intersects the AB line, so force a sideways bend dir based on which side the object came from
+        else 
+        {
+            Vector3 ABdir = (endPoint.position - startPoint.position).normalized;
+
+            Vector3 objCenter = col.bounds.center;
+            Vector3 A = startPoint.position;
+
+            float t = Vector3.Dot(objCenter - A, ABdir);
+            Vector3 linePoint = A + ABdir * t;
+
+            Vector3 fromLine = objCenter - linePoint;
+
+            bendDir = fromLine.normalized;
+        }
+
+        if (bendAway) bendDir = -bendDir;
 
         float bend = 1f - (distanceToTarget / bendRadius);//LEARN
-        float weight = bend * bend;
-        weight *= archWeightFactor;
+        float weight = bend * bend * archWeightFactor;
 
-        return dirToTarget * bendStrength * weight;
+        return bendDir * bendStrength * weight;
     }
 
     private void RedistributePointsEvenlyAlongCurve(ref Vector3[] points)
@@ -298,7 +329,6 @@ public class PGSSpline : MonoBehaviour
                        (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
     }
 
-    //TODO: REFACTOR THIS
     private void OnDrawGizmos()
     {
         // Decide which set of points to visualize
@@ -306,33 +336,12 @@ public class PGSSpline : MonoBehaviour
 
         GenerateControlPointsFromAtoB();
         pts = generatedPoints;
-        
-        //DRAW SPHERES AT EACH POINT
-        Gizmos.color = Color.yellow;
-        
 
-        for (int i = 0; i < pts.Length; i++)
-        {
-            Gizmos.DrawSphere(pts[i], gizmoSphereRadius);
-        }
-
-        Gizmos.color = Color.red; 
-        Gizmos.DrawSphere(pts[0], gizmoSphereRadius * 1.5f);   // p0
-        Gizmos.color = Color.green; 
-        Gizmos.DrawSphere(pts[1], gizmoSphereRadius * 1.2f);   // p1
-        int lastP = pts.Length - 2;
-        Gizmos.color = Color.green; 
-        Gizmos.DrawSphere(pts[lastP], gizmoSphereRadius * 1.2f);   // pN - 2
-        int endP = pts.Length - 1;
-        Gizmos.color = Color.red; 
-        Gizmos.DrawSphere(pts[endP], gizmoSphereRadius * 1.5f);   // pN - 1
-
-        //Spline Color
+        //DRAW LINE BETWEEN POINTS
         Gizmos.color = Color.white;
         int numCurves = pts.Length - 3;
         if (numCurves <= 0) return;
 
-        //DRAW LINE BETWEEN POINTS
         Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
         for (int i = 0; i < numCurves; i++)
         {
@@ -351,22 +360,47 @@ public class PGSSpline : MonoBehaviour
             }
         }
 
-        //DRAW POINTS XYZ AXES
-        for (int i = 0; i < pts.Length; i++) 
+        //DRAW SPHERES AT EACH POINT
+        if (enableGizmoPoints)
         {
-            Vector3 currentPoint = pts[i]; 
-            Vector3 xDir = new Vector3(currentPoint.x + gizmoAxesLength, currentPoint.y, currentPoint.z);
-            Vector3 yDir = new Vector3(currentPoint.x, currentPoint.y + gizmoAxesLength, currentPoint.z);
-            Vector3 zDir = new Vector3(currentPoint.x, currentPoint.y, currentPoint.z + gizmoAxesLength);
-            
+            Gizmos.color = Color.yellow;
+
+            for (int i = 0; i < pts.Length; i++)
+            {
+                Gizmos.DrawSphere(pts[i], gizmoSphereRadius);
+            }
+
             Gizmos.color = Color.red;
-            Gizmos.DrawLine(currentPoint, xDir);
-
+            Gizmos.DrawSphere(pts[0], gizmoSphereRadius * 1.5f); //p0 start point
             Gizmos.color = Color.green;
-            Gizmos.DrawLine(currentPoint, yDir);
+            Gizmos.DrawSphere(pts[1], gizmoSphereRadius * 1.5f); //p1 starting spline point
+            int lastP = pts.Length - 2;
+            Gizmos.color = Color.green;
+            Gizmos.DrawSphere(pts[lastP], gizmoSphereRadius * 1.5f); //pN - 2 ending spline point
+            int endP = pts.Length - 1;
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(pts[endP], gizmoSphereRadius * 1.5f); //pN - 1 end point
+        }
 
-            Gizmos.color = Color.blue;
-            Gizmos.DrawLine(currentPoint, zDir);
+        //DRAW POINTS XYZ AXES
+        if (enableGizmoAxes) 
+        {
+            for (int i = 0; i < pts.Length; i++)
+            {
+                Vector3 currentPoint = pts[i];
+                Vector3 xDir = new Vector3(currentPoint.x + gizmoAxesLength, currentPoint.y, currentPoint.z);
+                Vector3 yDir = new Vector3(currentPoint.x, currentPoint.y + gizmoAxesLength, currentPoint.z);
+                Vector3 zDir = new Vector3(currentPoint.x, currentPoint.y, currentPoint.z + gizmoAxesLength);
+
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(currentPoint, xDir);
+
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(currentPoint, yDir);
+
+                Gizmos.color = Color.blue;
+                Gizmos.DrawLine(currentPoint, zDir);
+            }
         }
     }
 }
