@@ -4,13 +4,15 @@ using UnityEngine;
 public class LSystems : MonoBehaviour
 {
     private string tree;
+    public bool enableRandomness = false;
     public string axiom;
-    [Range(0, 10)]public int iterations;
+    public string ruleF = "FF";
+    public string ruleB = "[+FB][-FB]";
+    [Range(1, 10)]public int iterations;
+    [Range(0.001f, 1f)] public float length;
+    [Range(0, 180)] public float angle;
     Stack<LSystemTransformInfo> stack = new Stack<LSystemTransformInfo> ();
-    LSystemTransformInfo helper;
-    public float length;
     private List<List<Vector3>> LineList = new List<List<Vector3>> ();
-    [Range(0, 100)] public float angle;
 
     private void Start()
     {
@@ -18,14 +20,6 @@ public class LSystems : MonoBehaviour
         Debug.Log("Starting tree: " + tree);
         ExpandTreeString();
         CreateMesh();
-    }
-
-    private void OnDrawGizmos()
-    {
-        foreach(List<Vector3> line in LineList) 
-        {
-            Gizmos.DrawLine(line[0], line[1]);
-        }
     }
 
     void ExpandTreeString() 
@@ -40,12 +34,34 @@ public class LSystems : MonoBehaviour
             //Assign the new string after each iteration to tree
             foreach (char j in tree) 
             {
-                expandedTree += j switch
+                switch (j) 
                 {
-                    'F' => "FF",
-                    'B' => "[lFB] [rFB]",
-                    _ => j.ToString()
-                };
+                    case 'F':
+                        if (enableRandomness && Random.Range(0f, 100f) < 50f)
+                        {
+                            expandedTree += "F";
+                        }
+                        else 
+                        {
+                            expandedTree += ruleF;
+                        }
+                        break;
+                    case 'B':
+                        float random = Random.Range(0f, 100f);
+                        if (enableRandomness && random < 50f)
+                        {
+                            //Choose which side to rotate an extra amount
+                            expandedTree += (random < 25f) ? "[++FB][-FB]" : "[+FB][--FB]";
+                        }
+                        else 
+                        {
+                            expandedTree += ruleB;
+                        }
+                        break;
+                    default:
+                        expandedTree += j.ToString();
+                        break;
+                }
             }
 
             tree = expandedTree;
@@ -62,40 +78,42 @@ public class LSystems : MonoBehaviour
         {
             switch (j) 
             {
-                case 'F':
+                case 'F': //Move forward
                     initialPoisition = transform.position;
                     transform.Translate(Vector3.up * length);
                     LineList.Add(new List<Vector3>() { initialPoisition, transform.position}); //Add start and end points of the line
                     initialPoisition = transform.position; //Setting initial pos for next iteration
                     break;
-
                 case 'B':
                     //Does nothing
                     break;
-
-                case '[':
+                case '[': //Push current drawing state onto stack
                     stack.Push(new LSystemTransformInfo()
                     {
                         position = transform.position,
                         rotation = transform.rotation,
                     });
                     break;
-
-                case ']':
-                    LSystemTransformInfo helper = stack.Pop(); //Set current pos and rot from popped stack
+                case ']': //Pop current state from from stack
+                    LSystemTransformInfo helper = stack.Pop();
                     transform.position = helper.position;
                     transform.rotation = helper.rotation;
                     break;
-
-                case 'l':
+                case '+': //Rotate left
                     transform.Rotate(Vector3.back, angle);
                     break;
-
-                case 'r':
+                case '-': //Rotate right
                     transform.Rotate(Vector3.forward, angle);
-
                     break;
             }
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        foreach (List<Vector3> line in LineList)
+        {
+            Gizmos.DrawLine(line[0], line[1]);
         }
     }
 }
