@@ -11,7 +11,7 @@ public class PGSSpline : MonoBehaviour
     public Vector3[] generatedPoints;
 
     [Header("Catmull Rom Spline Settings")]
-    [Range(10, 200)] public int totalSplinePoints = 20;
+    [Range(10, 400)] public int totalSplinePoints = 20;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
     public bool loopedSpline = false;
@@ -29,10 +29,10 @@ public class PGSSpline : MonoBehaviour
 
     [Header("Perlin Noise Settings")]
     public bool enableNoise = false;
-    [Range(0.01f, 20f)] public float noiseAmplitude = 1f;
+    [Range(0.01f, 2f)] public float noiseAmplitude = 1f;
     [Range(0.001f, 1f)] public float noiseFrequency = 1f;
-    [Range(-100f, 100f)] public float noiseOffsetX = 0f;
-    [Range(-100f, 100f)] public float noiseOffsetY = 0f;
+    [Range(-100f, 100f)] public float perlinOffset = 0f;
+    [Range(0.25f, 4f)] public float noiseSharpness = 1f;
 
     [Header("Bend Setting")]
     public bool enableBending = true;
@@ -42,8 +42,7 @@ public class PGSSpline : MonoBehaviour
     [Range(1f, 20f)] public float bendRadius = 5f;
     [Range(1f, 5f)] public float bendStrength = 1f;
     private const int maxPhysicsTargetsPerPoint = 4;
-    private const int denseSamplesPerSegment = 32; // Resolution Per Catmull segment
-    private const float bendClamp = 0.01f; //Explain well
+    private const float bendClamp = 0.01f;
 
     [Header("Gizmos Settings")]
     public bool enableGizmoAxes = false;
@@ -250,9 +249,20 @@ public class PGSSpline : MonoBehaviour
             Vector3 noiseOffset = Vector3.zero;
             if (enableNoise) 
             {
-                float noise = Mathf.PerlinNoise(currentPointOnLine.x * noiseFrequency + noiseOffsetX, currentPointOnLine.y * noiseFrequency + noiseOffsetY) * noiseAmplitude;
-                noiseOffset.x = noise;
-                noiseOffset.y = noise;
+                float noiseBase = (p + perlinOffset) * noiseFrequency;
+                float sideNoise = Mathf.PerlinNoise(noiseBase, 0f);
+                float upNoise = Mathf.PerlinNoise(-sideNoise, 0f);
+
+                //Remmap side and up noise to -1, 1 for directional functionality
+                float sideValue = (sideNoise - 0.5f) * 2f;
+                float upValue = (upNoise - 0.5f) * 2f;
+
+                //Sharpen noise to get spikyness
+                sideValue = Mathf.Sign(sideValue) * Mathf.Pow(Mathf.Abs(sideValue), noiseSharpness);
+                upValue = Mathf.Sign(upValue) * Mathf.Pow(Mathf.Abs(upValue), noiseSharpness);
+
+
+                noiseOffset = (side * sideValue * noiseAmplitude) + (up * upValue * noiseAmplitude);
             }
 
             //Final offset position of current point before doing bending logic
@@ -280,11 +290,11 @@ public class PGSSpline : MonoBehaviour
 
     private void LineRenderOnCatmullRomPGS(Vector3[] points)
     {
+        //Deciding resolution/segement count of line renderer
         int totalCatmullSegments = points.Length - 3;
         int totalSegments = totalCatmullSegments * segmentResolution;
         line.positionCount = totalSegments + 1;
 
-        //First sample t = 0 of first curve
         int index = 0;
         Vector3 previousPos = CatmullRom(points[0], points[1], points[2], points[3], 0f);
         line.SetPosition(index, previousPos);
@@ -298,9 +308,9 @@ public class PGSSpline : MonoBehaviour
             Vector3 p3 = points[i + 3];
 
             //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
-            for (int s = 1; s <= segmentResolution; s++)
+            for (int lineSeg = 1; lineSeg <= segmentResolution; lineSeg++)
             {
-                float t = s / (float)segmentResolution;
+                float t = lineSeg / (float)segmentResolution;
                 Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
 
                 line.SetPosition(index, pos);
