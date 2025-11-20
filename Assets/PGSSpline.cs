@@ -63,7 +63,7 @@ public class PGSSpline : MonoBehaviour
     private void Update()
     {
         BuildSplineFromHandles();
-        DrawLineOnCatmullRomProceduralSpline(generatedPoints); 
+        LineRenderOnCatmullRomPGS(generatedPoints); 
     }
 
     private void BuildSplineFromHandles()
@@ -278,6 +278,38 @@ public class PGSSpline : MonoBehaviour
         return points;
     }
 
+    private void LineRenderOnCatmullRomPGS(Vector3[] points)
+    {
+        int totalCatmullSegments = points.Length - 3;
+        int totalSegments = totalCatmullSegments * segmentResolution;
+        line.positionCount = totalSegments + 1;
+
+        //First sample t = 0 of first curve
+        int index = 0;
+        Vector3 previousPos = CatmullRom(points[0], points[1], points[2], points[3], 0f);
+        line.SetPosition(index, previousPos);
+        index++;
+
+        for (int i = 0; i < totalCatmullSegments; i++)
+        {
+            Vector3 p0 = points[i];
+            Vector3 p1 = points[i + 1];
+            Vector3 p2 = points[i + 2];
+            Vector3 p3 = points[i + 3];
+
+            //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
+            for (int s = 1; s <= segmentResolution; s++)
+            {
+                float t = s / (float)segmentResolution;
+                Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
+
+                line.SetPosition(index, pos);
+                index++;
+                previousPos = pos;
+            }
+        }
+    }
+
     private Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor, Vector3 A, Vector3 B)
     {
         if (col == null) 
@@ -395,38 +427,6 @@ public class PGSSpline : MonoBehaviour
         points[0] = start; //New A
         points[points.Length - 1] = end; //New B
     }
-  
-    private void DrawLineOnCatmullRomProceduralSpline(Vector3[] points)
-    {
-        int totalCatmullCurves = points.Length - 3;
-        int totalSegments = totalCatmullCurves * segmentResolution;
-        line.positionCount = totalSegments + 1;
-
-        //Iterating through points and storing positions of each point per each curve segment 
-        int index = 0;
-        for (int i = 0; i < totalCatmullCurves; i++)
-        {
-            Vector3 p0 = points[i];
-            Vector3 p1 = points[i + 1];
-            Vector3 p2 = points[i + 2];
-            Vector3 p3 = points[i + 3];
-
-            //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
-            for (int s = 0; s < segmentResolution; s++)
-            {
-                float t = s / (float)segmentResolution;
-                line.SetPosition(index, CatmullRom(p0, p1, p2, p3, t));
-                index++;
-            }
-        }
-
-        Vector3 lp0 = points[points.Length - 4];
-        Vector3 lp1 = points[points.Length - 3];
-        Vector3 lp2 = points[points.Length - 2];
-        Vector3 lp3 = points[points.Length - 1];
-
-        line.SetPosition(index, CatmullRom(lp0, lp1, lp2, lp3, 1f));
-    }
 
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
     {
@@ -443,19 +443,19 @@ public class PGSSpline : MonoBehaviour
     private void OnDrawGizmos()
     {
         BuildSplineFromHandles();
-        Vector3[] pts = generatedPoints;
+        Vector3[] points = generatedPoints;
 
         //DRAW LINE BETWEEN POINTS
         Gizmos.color = Color.white;
-        int totalCatmullSegments = pts.Length - 3;
+        int totalCatmullSegments = points.Length - 3;
+        Vector3 previousPos = CatmullRom(points[0], points[1], points[2], points[3], 0f);
 
-        Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
         for (int i = 0; i < totalCatmullSegments; i++)
         {
-            Vector3 p0 = pts[i];
-            Vector3 p1 = pts[i + 1];
-            Vector3 p2 = pts[i + 2];
-            Vector3 p3 = pts[i + 3];
+            Vector3 p0 = points[i];
+            Vector3 p1 = points[i + 1];
+            Vector3 p2 = points[i + 2];
+            Vector3 p3 = points[i + 3];
 
             for (int s = 1; s <= segmentResolution; s++)
             {
@@ -469,33 +469,31 @@ public class PGSSpline : MonoBehaviour
 
         //DRAW SPHERES AT EACH POINT
         Gizmos.color = Color.yellow;
-
         if (enableGizmoPoints)
         {
-
-            for (int i = 0; i < pts.Length; i++)
+            for (int i = 0; i < points.Length; i++)
             {
-                Gizmos.DrawSphere(pts[i], gizmoSphereRadius);
+                Gizmos.DrawSphere(points[i], gizmoSphereRadius);
             }
 
             Gizmos.color = Color.red;
-            Gizmos.DrawSphere(pts[0], gizmoSphereRadius * 1.5f); //p0 start point
+            Gizmos.DrawSphere(points[0], gizmoSphereRadius * 1.5f); //p0 start point
             Gizmos.color = Color.green;
-            Gizmos.DrawSphere(pts[1], gizmoSphereRadius * 1.5f); //p1 starting spline point
-            int lastP = pts.Length - 2;
+            Gizmos.DrawSphere(points[1], gizmoSphereRadius * 1.5f); //p1 starting spline point
+            int lastP = points.Length - 2;
             Gizmos.color = Color.green;
-            Gizmos.DrawSphere(pts[lastP], gizmoSphereRadius * 1.5f); //pN - 2 ending spline point
-            int endP = pts.Length - 1;
+            Gizmos.DrawSphere(points[lastP], gizmoSphereRadius * 1.5f); //pN - 2 ending spline point
+            int endP = points.Length - 1;
             Gizmos.color = Color.red;
-            Gizmos.DrawSphere(pts[endP], gizmoSphereRadius * 1.5f); //pN - 1 end point
+            Gizmos.DrawSphere(points[endP], gizmoSphereRadius * 1.5f); //pN - 1 end point
         }
 
         //DRAW POINTS XYZ AXES
         if (enableGizmoAxes) 
         {
-            for (int i = 0; i < pts.Length; i++)
+            for (int i = 0; i < points.Length; i++)
             {
-                Vector3 currentPoint = pts[i];
+                Vector3 currentPoint = points[i];
                 Vector3 xDir = new Vector3(currentPoint.x + gizmoAxesLength, currentPoint.y, currentPoint.z);
                 Vector3 yDir = new Vector3(currentPoint.x, currentPoint.y + gizmoAxesLength, currentPoint.z);
                 Vector3 zDir = new Vector3(currentPoint.x, currentPoint.y, currentPoint.z + gizmoAxesLength);
