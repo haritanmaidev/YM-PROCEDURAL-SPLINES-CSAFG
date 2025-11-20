@@ -6,20 +6,21 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(LineRenderer))]
 public class PGSSpline : MonoBehaviour
 {
-    [Header("Catmull Rom Spline Settings")]
-    [Range(2, 200)] public int totalSplinePoints = 20;
-    [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
-    [Range(1, 3)] public float splineLengthMultiplier = 1f;
-    public bool loopedSpline;
-    public bool limitSplineDistance = false;
-    [Range(1, 100f)] public float maxSplineDistance = 10f;
+    [Header("Spline Handles & Points")]
     public List<Transform> handles;
     public Vector3[] generatedPoints;
+
+    [Header("Catmull Rom Spline Settings")]
+    [Range(10, 200)] public int totalSplinePoints = 20;
+    [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
+    [Range(1, 3)] public float splineLengthMultiplier = 1f;
+    public bool loopedSpline = false;
+    public bool centerFallOff = false;
+    [Range(0, 1)] public float fallOffInfluence = 1f;
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
     [Range(-10, 10f)] public float verticalCurvature = 0f;
-    [Range(0, 1)] public float curvatureArcWeightInfluence = 1f;
 
     [Header("Spiral Settings")]
     public bool enableSpiral = false;
@@ -32,8 +33,6 @@ public class PGSSpline : MonoBehaviour
     [Range(0.001f, 1f)] public float noiseFrequency = 1f;
     [Range(-100f, 100f)] public float noiseOffsetX = 0f;
     [Range(-100f, 100f)] public float noiseOffsetY = 0f;
-    //[Range(1, 3)] public int octaves = 0;
-    //[Range(0.25f, 10f)] public float exponent = 1f; //0.25 because anything below that is barely noticable
 
     [Header("Bend Setting")]
     public bool enableBending = true;
@@ -42,7 +41,8 @@ public class PGSSpline : MonoBehaviour
     public LayerMask bendLayer = 3;
     [Range(1f, 20f)] public float bendRadius = 5f;
     [Range(1f, 5f)] public float bendStrength = 1f;
-    public int maxPhysicsTargetsPerPoint = 4;
+    private const int maxPhysicsTargetsPerPoint = 4;
+    private const int denseSamplesPerSegment = 32; // Resolution Per Catmull segment
     private const float bendClamp = 0.01f; //Explain well
 
     [Header("Gizmos Settings")]
@@ -51,11 +51,8 @@ public class PGSSpline : MonoBehaviour
     public bool enableGizmoPoints = false;
     [Range(0.01f, 0.1f)] public float gizmoSphereRadius = 0.065f;
 
-
     private LineRenderer line;
 
-    //TODO: User can manually decide which 
-    //FIX: CURVE WEIGHT ARC NEEDS TO BE FIXED, IT EFFECTS THINGS OUTSIDE CURVATURE SECTION
     //CONSIDER: Objects that will always attract or repel
 
     private void Awake()
@@ -67,7 +64,6 @@ public class PGSSpline : MonoBehaviour
     {
         BuildSplineFromHandles();
         DrawLineOnCatmullRomProceduralSpline(generatedPoints); 
-        //NOTE: NO NULL CHECK HERE BECAUSE POINTS WILL ALWAYS BE MORE THAN 4
     }
 
     private void BuildSplineFromHandles()
@@ -78,26 +74,17 @@ public class PGSSpline : MonoBehaviour
             return;
         }
 
-        // ===========================
-        // CASE 1: Single handle
-        // ===========================
+        // CASE 1 - Single handle spline gen
         if (handles.Count == 1)
         {
-            Vector3 pointA = handles[0].position;
+            Vector3 A = handles[0].position;
+            Vector3 forwardA = handles[0].forward;
+            Vector3 B = A + forwardA.normalized * 20f;
 
-            // Use handle's forward; if it's zero, fall back to world forward.
-            Vector3 forward = handles[0].forward;
-            if (forward.sqrMagnitude < 0.0001f)
-            {
-                forward = Vector3.forward;
-            }
+            generatedPoints = GenerateSplinePointsFromAtoB(A, B, totalSplinePoints);
 
-            Vector3 pointB = pointA + forward.normalized * maxSplineDistance;
-
-            generatedPoints = GenerateControlPointsFromAtoB(pointA, pointB, totalSplinePoints);
-
-            // Spacing fix mainly needed when bending is involved.
-            if (enableBending && useEvenSpacing && generatedPoints != null && generatedPoints.Length >= 4)
+            //Fix for bug where points were distanced unevenly due to bend influence from scene objects
+            if (enableBending && useEvenSpacing && generatedPoints != null)
             {
                 RedistributePointsEvenlyAlongCurve(ref generatedPoints);
             }
@@ -105,103 +92,71 @@ public class PGSSpline : MonoBehaviour
             return;
         }
 
-        // ===========================
-        // CASE 2: Two or more handles
-        // ===========================
-        int handleCount = handles.Count;
+        //CASE 2 - Two or more handles
+        int splineSectionCount = loopedSpline ? handles.Count : handles.Count - 1; //Looped = 1 extra spline section from last handle to first handle
 
-        // How many spline sections (between handles)?
-        // - Not looped: H-1 sections (0->1, 1->2, ..., H-2->H-1)
-        // - Looped:     H sections  (0->1, 1->2, ..., H-2->H-1, H-1->0)
-        int splineSectionCount = loopedSpline ? handleCount : handleCount - 1;
-
-        if (splineSectionCount <= 0)
-        {
-            generatedPoints = null;
-            return;
-        }
-
-        // -----------------------------------
-        // Step 1: Measure each section length
-        // -----------------------------------
-        float[] sectionLengths = new float[splineSectionCount];
-        float totalLength = 0f;
+        //2.1 Measure each spline section's length
+        float[] lengthOfSplineSection = new float[splineSectionCount];
+        float totalSplineLength = 0f;
 
         if (loopedSpline)
         {
-            // Looped: section i is handles[i] -> handles[(i+1) % H]
             for (int i = 0; i < splineSectionCount; i++)
             {
                 int indexA = i;
-                int indexB = (i + 1) % handleCount;
+                int indexB = (i + 1) % handles.Count;
 
-                Vector3 pointA = handles[indexA].position;
-                Vector3 pointB = handles[indexB].position;
+                Vector3 handleA = handles[indexA].position;
+                Vector3 handleB = handles[indexB].position;
 
-                float len = Vector3.Distance(pointA, pointB);
-                sectionLengths[i] = len;
-                totalLength += len;
+                float currentSectionLength = Vector3.Distance(handleA, handleB);
+                lengthOfSplineSection[i] = currentSectionLength;
+                totalSplineLength += currentSectionLength;
             }
         }
-        else
+        else //Not looped?
         {
-            // Not looped: section i is handles[i] -> handles[i+1]
             for (int i = 0; i < splineSectionCount; i++)
             {
                 int indexA = i;
                 int indexB = i + 1;
 
-                Vector3 pointA = handles[indexA].position;
-                Vector3 pointB = handles[indexB].position;
+                Vector3 handleA = handles[indexA].position;
+                Vector3 handleB = handles[indexB].position;
 
-                float len = Vector3.Distance(pointA, pointB);
-                sectionLengths[i] = len;
-                totalLength += len;
+                float currentSectionLength = Vector3.Distance(handleA, handleB);
+                lengthOfSplineSection[i] = currentSectionLength;
+                totalSplineLength += currentSectionLength;
             }
         }
 
-        // All handles on top of each other?
-        if (totalLength <= 0f)
-        {
-            generatedPoints = null;
-            return;
-        }
-
-        // ---------------------------------------------------
-        // Step 2: Decide how many internal points each section gets
-        // ---------------------------------------------------
-        int totalInternalPoints = totalSplinePoints; // just use your inspector value
-
+        //2.2 Decide how many spline/internal points each spline section gets
         int[] internalPointsPerSection = new int[splineSectionCount];
-
-        int remainingInternal = totalInternalPoints;
-        float remainingLength = totalLength;
+        int remainingInternal = totalSplinePoints;
+        float remainingLength = totalSplineLength;
 
         for (int i = 0; i < splineSectionCount; i++)
         {
+            // splineSecCount - 1 = Last spline section, and last spline section gets whatever points are left
             if (i == splineSectionCount - 1)
             {
-                // Last section gets whatever is left, so the total sums exactly.
                 internalPointsPerSection[i] = remainingInternal;
             }
             else
             {
-                float share = (remainingLength > 0f) ? (sectionLengths[i] / remainingLength) : 0f;
+                float share = (remainingLength > 0f) ? (lengthOfSplineSection[i] / remainingLength) : 0f;
                 int allocated = Mathf.RoundToInt(remainingInternal * share);
 
                 if (allocated < 0) allocated = 0;
 
                 internalPointsPerSection[i] = allocated;
                 remainingInternal -= allocated;
-                remainingLength -= sectionLengths[i];
+                remainingLength -= lengthOfSplineSection[i];
             }
         }
 
-        // ---------------------------------------------------
-        // Step 3: Generate each section's mini spline and stitch them
-        // ---------------------------------------------------
-        List<Vector3> combined = new List<Vector3>();
-
+        //2.3 Generate points for each spline section between handleN - handleN+1 and combine them
+        List<Vector3> combinedPoints = new List<Vector3>(); //Lists cuz using array here were pain
         for (int i = 0; i < splineSectionCount; i++)
         {
             int indexA;
@@ -210,7 +165,7 @@ public class PGSSpline : MonoBehaviour
             if (loopedSpline)
             {
                 indexA = i;
-                indexB = (i + 1) % handleCount;
+                indexB = (i + 1) % handles.Count;
             }
             else
             {
@@ -218,55 +173,37 @@ public class PGSSpline : MonoBehaviour
                 indexB = i + 1;
             }
 
-            Vector3 pointA = handles[indexA].position;
-            Vector3 pointB = handles[indexB].position;
+            Vector3 A = handles[indexA].position;
+            Vector3 B = handles[indexB].position;
+            int currentSectionsInternalCount = internalPointsPerSection[i];
 
-            int internalCount = internalPointsPerSection[i];
-
-            Vector3[] sectionPoints = GenerateControlPointsFromAtoB(pointA, pointB, internalCount);
-
-            if (sectionPoints == null || sectionPoints.Length < 2)
-                continue;
+            Vector3[] sectionPoints = GenerateSplinePointsFromAtoB(A, B, currentSectionsInternalCount);
 
             if (i == 0)
             {
-                // First section: keep everything (A + internal + B)
-                combined.AddRange(sectionPoints);
+                //First section: keep everything (A point + internals + B point)
+                combinedPoints.AddRange(sectionPoints);
             }
             else
             {
-                // Later sections: skip the first point (their A),
-                // because it's the same position as the previous section's B.
+                //Later sections: skip the first point A since its same as previous section's B || end point
                 for (int j = 1; j < sectionPoints.Length; j++)
                 {
-                    combined.Add(sectionPoints[j]);
+                    combinedPoints.Add(sectionPoints[j]);
                 }
             }
         }
 
-        if (combined.Count < 4)
-        {
-            generatedPoints = null;
-            return;
-        }
+        generatedPoints = combinedPoints.ToArray();
 
-        generatedPoints = combined.ToArray();
-
-        // ---------------------------------------------------
-        // Step 4: Optional spacing fix for bending
-        // ---------------------------------------------------
-        if (enableBending && useEvenSpacing && generatedPoints != null && generatedPoints.Length >= 4)
+        //Fix for bug where points were distanced unevenly due to bend influence from scene objects
+        if (enableBending && useEvenSpacing && generatedPoints != null)
         {
             RedistributePointsEvenlyAlongCurve(ref generatedPoints);
         }
-
-        if (limitSplineDistance && generatedPoints != null && generatedPoints.Length >= 2)
-        {
-            ApplyDistanceLimit(ref generatedPoints);
-        }
     }
 
-    private Vector3[] GenerateControlPointsFromAtoB(Vector3 A, Vector3 B, int internalPointCount)
+    private Vector3[] GenerateSplinePointsFromAtoB(Vector3 A, Vector3 B, int internalPointCount)
     {
         Vector3 AB = B - A;
         Vector3 dir = AB.normalized;
@@ -274,19 +211,20 @@ public class PGSSpline : MonoBehaviour
         Vector3 up = Vector3.Cross(side, dir).normalized; //Local up per point
         float distance = AB.magnitude;
 
-        //Build array of points: A/Start + internal/spline points + B/End
-        int totalPointsLength = totalSplinePoints + 2;
+        //1 - Make array for points: A/Start + internal/spline points + B/End
+        int totalPointsLength = internalPointCount + 2;
         Vector3[] points = new Vector3[totalPointsLength];
         points[0] = A;
         points[totalPointsLength - 1] = B;
 
-        //Extending the line AB based on pathLengthMultiplier
+        //2 - Extending the line AB based on pathLengthMultiplier
         float extra = distance * (splineLengthMultiplier - 1f) * 0.5f;
         Vector3 extendedA = A - dir * extra;
         Vector3 extendedB = B + dir * extra;
         float extendedDistance = (extendedB - extendedA).magnitude;
 
-        //Positioning the internal spline points between A and B. -2 to get the catmull rom based point not the actua final point
+        //3 - Positioning the internal spline points between A and B. Looping from first internal to last internal point.
+        //pt 1 for first internal point and totalPts - 2 to get the final internal point instead the actual end point
         for (int p = 1; p <= totalPointsLength - 2; p++) 
         {
             //INTIAL POSITION OF THE POINT
@@ -294,9 +232,8 @@ public class PGSSpline : MonoBehaviour
             Vector3 currentPointOnLine = extendedA + dir * (extendedDistance * t);
 
             //CURVATURE LOGIC
-            float arcWeightFactor = Mathf.Sin(Mathf.PI * t) * curvatureArcWeightInfluence; //Sin90 = 0
-            Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (Vector3.up * verticalCurvature * arcWeightFactor);
-            //WHY: should I use the splines up instead of vector up here?
+            float arcWeightFactor = centerFallOff? Mathf.Sin(Mathf.PI * t) * fallOffInfluence : 1f; //Sin90 = 0
+            Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (up * verticalCurvature * arcWeightFactor);
 
             //SPIRAL LOGIC
             Vector3 spiralOffset = Vector3.zero;
@@ -318,16 +255,13 @@ public class PGSSpline : MonoBehaviour
                 noiseOffset.y = noise;
             }
 
-            //Final offset position before bending logic
+            //Final offset position of current point before doing bending logic
             Vector3 basePos = currentPointOnLine + curvatureOffset + spiralOffset + noiseOffset;
 
             //BENDING TO AVOID OR BE ATTRACTED LOGIC
             Vector3 targetOffset = Vector3.zero;
             if (enableBending) 
             {
-                //TODO: If object is practically supposed to touch the spline, exaggerated the bend a little since the current logic lead to bending through the object.
-                //TODO: If both are at the same height, choose a random up or down dir to bend towards/away from
-
                 Collider[] cols = Physics.OverlapSphere(basePos, bendRadius, bendLayer);
                 int maxCollisions = Mathf.Min(cols.Length, maxPhysicsTargetsPerPoint); //Max objects influecing the spline
 
@@ -344,7 +278,7 @@ public class PGSSpline : MonoBehaviour
         return points;
     }
 
-    Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor, Vector3 A, Vector3 B)
+    private Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor, Vector3 A, Vector3 B)
     {
         if (col == null) 
         {
@@ -352,23 +286,23 @@ public class PGSSpline : MonoBehaviour
             return Vector3.zero;
         }
 
-        //Gets closest point on object's surface
+        //1 - Gets closest point on object's surface
         Vector3 closest = col.ClosestPoint(splinePoint);
         Vector3 toTarget = closest - splinePoint;
         float distanceToTarget = toTarget.magnitude;
         if (distanceToTarget >= bendRadius) return Vector3.zero;
 
-        //Choosing bend direction
+        //2 - Choosing bend direction
         Vector3 bendDir;
 
-        //Case 1: Collider is not intersecting the spline
         if (distanceToTarget > bendClamp)
         {
+            //Case 1: Collider is not intersecting the spline
             bendDir = toTarget / distanceToTarget;
         }
-        //Case 2: Object colider intersects the AB line, so force a sideways bend dir based on which side the object came from
         else 
         {
+            //Case 2: Object colider intersects the AB line, so force a sideways bend dir based on which side the object came from
             Vector3 ABdir = (B - A).normalized;
             Vector3 objCenter = col.bounds.center;
             //WHAT:
@@ -379,9 +313,11 @@ public class PGSSpline : MonoBehaviour
             bendDir = fromLine.normalized;
         }
 
+        //3 - Choose to bend towards or away from
         if (bendAway) bendDir = -bendDir;
 
-        float bend = 1f - (distanceToTarget / bendRadius);//LEARN
+        //4 - 
+        float bend = 1f - (distanceToTarget / bendRadius);
         float weight = bend * bend * archWeightFactor;
 
         return bendDir * bendStrength * weight;
@@ -389,61 +325,50 @@ public class PGSSpline : MonoBehaviour
 
     private void RedistributePointsEvenlyAlongCurve(ref Vector3[] points)
     {
-        int pointCount = points.Length;
+        //1 - Dense samples along current Catmull curve
+        List<Vector3> revaluatedPoints = new List<Vector3>();
+        int totalCatmullSegments = points.Length - 3;
 
-        //STEP 1: Dense samples along current Catmull curve
-        const int denseSamplesPerCurve = 32; // per Catmull segment
-        List<Vector3> densePoints = new List<Vector3>();
-
-        int numCurves = pointCount - 3;
-
-        for (int i = 0; i < numCurves; i++)
+        for (int i = 0; i < totalCatmullSegments; i++)
         {
             Vector3 p0 = points[i];
             Vector3 p1 = points[i + 1];
             Vector3 p2 = points[i + 2];
             Vector3 p3 = points[i + 3];
 
-            for (int s = 0; s <= denseSamplesPerCurve; s++)
+            for (int seg = 0; seg <= segmentResolution; seg++)
             {
-                float t = s / (float)denseSamplesPerCurve;
+                float t = seg / (float)segmentResolution;
                 Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
 
                 // Avoid duplicating the first sample of each segment except the first one
-                if (i > 0 && s == 0)
-                    continue;
+                if (i > 0 && seg == 0) continue;
 
-                densePoints.Add(pos);
+                revaluatedPoints.Add(pos);
             }
         }
 
-        int denseCount = densePoints.Count;
-        if (denseCount < 2)
-            return;
-
-        //STEP 2: Cumulative distances
-        float[] cumLen = new float[denseCount];
+        //2 - Cumulative distances
+        float[] cumLen = new float[revaluatedPoints.Count];
         cumLen[0] = 0f;
 
-        for (int i = 1; i < denseCount; i++)
+        for (int i = 1; i < revaluatedPoints.Count; i++)
         {
-            float segLen = Vector3.Distance(densePoints[i], densePoints[i - 1]);
+            float segLen = Vector3.Distance(revaluatedPoints[i], revaluatedPoints[i - 1]);
             cumLen[i] = cumLen[i - 1] + segLen;
         }
 
-        float totalLen = cumLen[denseCount - 1];
-        if (totalLen <= 0f)
-            return;
+        float totalLen = cumLen[revaluatedPoints.Count - 1];
 
-        //STEP 3: New points at equal distance intervals
-        Vector3[] newPoints = new Vector3[pointCount];
+        //3 - New points at equal distance intervals
+        Vector3[] newPoints = new Vector3[points.Length];
         int denseIndex = 0;
 
-        for (int j = 0; j < pointCount; j++)
+        for (int i = 0; i < points.Length; i++)
         {
-            float targetDist = (j / (float)(pointCount - 1)) * totalLen;
+            float targetDist = (i / (float)(points.Length - 1)) * totalLen;
 
-            while (denseIndex < denseCount - 2 && cumLen[denseIndex + 1] < targetDist)
+            while (denseIndex < revaluatedPoints.Count - 2 && cumLen[denseIndex + 1] < targetDist)
             {
                 denseIndex++;
             }
@@ -456,73 +381,21 @@ public class PGSSpline : MonoBehaviour
             if (segmentLen > 0f)
                 u = (targetDist - segmentStart) / segmentLen;
 
-            Vector3 a = densePoints[denseIndex];
-            Vector3 b = densePoints[denseIndex + 1];
+            Vector3 a = revaluatedPoints[denseIndex];
+            Vector3 b = revaluatedPoints[denseIndex + 1];
 
-            newPoints[j] = Vector3.Lerp(a, b, u);
+            newPoints[i] = Vector3.Lerp(a, b, u);
         }
 
-        //Since this is catmull curve, passing the internal points will cause it to redistribute from p2 rather than p1. Caused spline to have 1 segment missing at A and B
+        //Fix for bug that caused spline to have 1 segment missing at A and B
+        //Since this is catmull curve, passing the internal points will cause it to redistribute from p2 rather than p1, hence why passing A and B
         Vector3 start = points[0]; //Old A
-        Vector3 end = points[pointCount - 1]; //Old B
-
+        Vector3 end = points[points.Length - 1]; //Old B
         points = newPoints;
-
-        points[0] = start;
-        points[pointCount - 1] = end;
+        points[0] = start; //New A
+        points[points.Length - 1] = end; //New B
     }
-
-    private void ApplyDistanceLimit(ref Vector3[] points) 
-    {
-        //Get total length along the spline
-        float travelDistance = 0f;
-        for (int i = 0; i < points.Length - 1; i++) 
-        {
-            travelDistance += Vector3.Distance(points[i], points[i + 1]);
-        }
-
-        if (travelDistance <= maxSplineDistance) return;
-
-        List<Vector3> truncated = new List<Vector3>();
-        truncated.Add(points[0]);
-
-        float accumulated = 0f;
-
-        for (int i = 0; i < points.Length - 1; i++)
-        {
-            Vector3 a = points[i];
-            Vector3 b = points[i + 1];
-            float segLen = Vector3.Distance(a, b);
-
-            if (segLen <= 0f)
-                continue;
-
-            if (accumulated + segLen < maxSplineDistance)
-            {
-                // We can take the whole segment.
-                accumulated += segLen;
-                truncated.Add(b);
-            }
-            else
-            {
-                // We need to cut somewhere inside this segment.
-                float remaining = maxSplineDistance - accumulated;
-                float t = remaining / segLen; // 0..1 along a->b
-
-                Vector3 cutPoint = Vector3.Lerp(a, b, t);
-                truncated.Add(cutPoint);
-                break; // we reached the limit
-            }
-        }
-
-        // Catmull-Rom needs at least 4 points to behave properly.
-        if (truncated.Count >= 4)
-        {
-            points = truncated.ToArray();
-        }
-        // If fewer than 4, we just skip trimming to avoid breaking the curve.
-    }
-
+  
     private void DrawLineOnCatmullRomProceduralSpline(Vector3[] points)
     {
         int totalCatmullCurves = points.Length - 3;
@@ -569,18 +442,15 @@ public class PGSSpline : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        // Decide which set of points to visualize
-
         BuildSplineFromHandles();
         Vector3[] pts = generatedPoints;
 
         //DRAW LINE BETWEEN POINTS
         Gizmos.color = Color.white;
-        int numCurves = pts.Length - 3;
-        if (numCurves <= 0) return;
+        int totalCatmullSegments = pts.Length - 3;
 
         Vector3 previousPos = CatmullRom(pts[0], pts[1], pts[2], pts[3], 0f);
-        for (int i = 0; i < numCurves; i++)
+        for (int i = 0; i < totalCatmullSegments; i++)
         {
             Vector3 p0 = pts[i];
             Vector3 p1 = pts[i + 1];
@@ -598,9 +468,10 @@ public class PGSSpline : MonoBehaviour
         }
 
         //DRAW SPHERES AT EACH POINT
+        Gizmos.color = Color.yellow;
+
         if (enableGizmoPoints)
         {
-            Gizmos.color = Color.yellow;
 
             for (int i = 0; i < pts.Length; i++)
             {
