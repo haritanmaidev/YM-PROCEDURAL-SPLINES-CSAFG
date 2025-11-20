@@ -15,8 +15,7 @@ public class PGSSpline : MonoBehaviour
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
     public bool loopedSpline = false;
-    public bool centerFallOff = false;
-    [Range(0, 1)] public float fallOffInfluence = 1f;
+
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
@@ -43,6 +42,10 @@ public class PGSSpline : MonoBehaviour
     [Range(1f, 5f)] public float bendStrength = 1f;
     private const int maxPhysicsTargetsPerPoint = 4;
     private const float bendClamp = 0.01f;
+
+    [Header("Advanced Curve Setting")]
+    public bool useWeightFallOff = false;
+    [Range(0, 1)] public float falloffInfluence = 1f;
 
     [Header("Gizmos Settings")]
     public bool enableGizmoAxes = false;
@@ -73,7 +76,7 @@ public class PGSSpline : MonoBehaviour
             return;
         }
 
-        // CASE 1 - Single handle spline gen
+        //CASE 1 - Single handle spline gen
         if (handles.Count == 1)
         {
             Vector3 A = handles[0].position;
@@ -175,7 +178,6 @@ public class PGSSpline : MonoBehaviour
             Vector3 A = handles[indexA].position;
             Vector3 B = handles[indexB].position;
             int currentSectionsInternalCount = internalPointsPerSection[i];
-
             Vector3[] sectionPoints = GenerateSplinePointsFromAtoB(A, B, currentSectionsInternalCount);
 
             if (i == 0)
@@ -231,7 +233,7 @@ public class PGSSpline : MonoBehaviour
             Vector3 currentPointOnLine = extendedA + dir * (extendedDistance * t);
 
             //CURVATURE LOGIC
-            float arcWeightFactor = centerFallOff? Mathf.Sin(Mathf.PI * t) * fallOffInfluence : 1f; //Sin90 = 0
+            float arcWeightFactor = useWeightFallOff? Mathf.Sin(Mathf.PI * t) * falloffInfluence : 1f; //Sin90 = 0
             Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (up * verticalCurvature * arcWeightFactor);
 
             //SPIRAL LOGIC
@@ -286,38 +288,6 @@ public class PGSSpline : MonoBehaviour
         }
 
         return points;
-    }
-
-    private void LineRenderOnCatmullRomPGS(Vector3[] points)
-    {
-        //Deciding resolution/segement count of line renderer
-        int totalCatmullSegments = points.Length - 3;
-        int totalSegments = totalCatmullSegments * segmentResolution;
-        line.positionCount = totalSegments + 1;
-
-        int index = 0;
-        Vector3 previousPos = CatmullRom(points[0], points[1], points[2], points[3], 0f);
-        line.SetPosition(index, previousPos);
-        index++;
-
-        for (int i = 0; i < totalCatmullSegments; i++)
-        {
-            Vector3 p0 = points[i];
-            Vector3 p1 = points[i + 1];
-            Vector3 p2 = points[i + 2];
-            Vector3 p3 = points[i + 3];
-
-            //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
-            for (int lineSeg = 1; lineSeg <= segmentResolution; lineSeg++)
-            {
-                float t = lineSeg / (float)segmentResolution;
-                Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
-
-                line.SetPosition(index, pos);
-                index++;
-                previousPos = pos;
-            }
-        }
     }
 
     private Vector3 ComputeColliderBendOffset(Vector3 splinePoint, Collider col, float archWeightFactor, Vector3 A, Vector3 B)
@@ -436,6 +406,38 @@ public class PGSSpline : MonoBehaviour
         points = newPoints;
         points[0] = start; //New A
         points[points.Length - 1] = end; //New B
+    }
+
+    private void LineRenderOnCatmullRomPGS(Vector3[] points)
+    {
+        //Deciding resolution/segement count of line renderer
+        int totalCatmullSegments = points.Length - 3;
+        int totalSegments = totalCatmullSegments * segmentResolution;
+        line.positionCount = totalSegments + 1;
+
+        int index = 0;
+        Vector3 previousPos = CatmullRom(points[0], points[1], points[2], points[3], 0f);
+        line.SetPosition(index, previousPos);
+        index++;
+
+        for (int i = 0; i < totalCatmullSegments; i++)
+        {
+            Vector3 p0 = points[i];
+            Vector3 p1 = points[i + 1];
+            Vector3 p2 = points[i + 2];
+            Vector3 p3 = points[i + 3];
+
+            //Evaluate t on each catmull's curve segment based on total segment/resolution count per each curve segment
+            for (int lineSeg = 1; lineSeg <= segmentResolution; lineSeg++)
+            {
+                float t = lineSeg / (float)segmentResolution;
+                Vector3 pos = CatmullRom(p0, p1, p2, p3, t);
+
+                line.SetPosition(index, pos);
+                index++;
+                previousPos = pos;
+            }
+        }
     }
 
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
