@@ -49,6 +49,7 @@ public class PGSSpline : MonoBehaviour
     [Range(0, 1)] public float falloffInfluence = 1f;
 
     [Header("L-SYSTEM Settings")]
+    public bool randomPosition = true;
     [Range(1, 6)] public int lSystemCount = 1;
     public LSystems lSystemPrefab;
 
@@ -463,8 +464,18 @@ public class PGSSpline : MonoBehaviour
         //Generate L systems on spline
         for (int i = 0; i < lSystemCount; i++) 
         {
-            float frac = (lSystemCount == 1) ? 0f : i / (float)(lSystemCount - 1);
-            Vector3 pos = EvalutePosition(frac);
+            float t;
+            if (randomPosition)
+            {
+                t = Random.Range(0.0f, 1.0f);
+            }
+            else 
+            {
+                t =  i / (float)(lSystemCount - 1);
+            }
+
+            Vector3 pos = EvalutePosition(t);
+            pos = new Vector3(pos.x, pos.y + 0.1f, pos.z);
             Quaternion rot = Quaternion.LookRotation(Vector3.forward, Vector3.up);
 
             LSystems lSystemObj = Instantiate(lSystemPrefab, pos , rot);
