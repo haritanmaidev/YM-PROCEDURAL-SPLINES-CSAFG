@@ -44,10 +44,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ff6914401740f44488346cc594a8a63, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  enableRandomness: 0
+  SO: {fileID: 11400000, guid: 77557555856747841a7883b41919625d, type: 2}
   axiom: FB
   ruleF: FF
   ruleB: '[+FB][-FB]'
-  iterations: 10
-  length: 0.105
-  angle: 45
+  iterations: 7
+  angle: 61
+  length: 0.025
+  enableRandomness: 0

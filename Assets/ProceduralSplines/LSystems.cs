@@ -3,19 +3,32 @@ using UnityEngine;
 
 public class LSystems : MonoBehaviour
 {
+    public LSystemSO SO;
     private string tree;
-    public bool enableRandomness = false;
     public string axiom;
     public string ruleF = "FF";
     public string ruleB = "[+FB][-FB]";
     [Range(1, 10)]public int iterations;
-    [Range(0.001f, 1f)] public float length;
     [Range(0, 180)] public float angle;
-    Stack<LSystemTransformInfo> stack = new Stack<LSystemTransformInfo> ();
+    [Range(0.001f, 1f)] public float length;
+    public bool enableRandomness = false;
     private List<List<Vector3>> LineList = new List<List<Vector3>> ();
+    Stack<LSystemTransformInfo> stack = new Stack<LSystemTransformInfo> ();
 
     private void Start()
     {
+        if (SO != null)
+        {
+            axiom = SO.axiom;
+            iterations = SO.iterations;
+            length = SO.length;
+            angle = SO.angle;
+            enableRandomness = SO.enableRandomness;
+
+            ruleF = SO.ruleF;
+            ruleB = SO.ruleB;
+        }
+
         tree = axiom;
         Debug.Log("Starting tree: " + tree);
         ExpandTreeString();
