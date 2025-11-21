@@ -6,16 +6,17 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(LineRenderer))]
 public class PGSSpline : MonoBehaviour
 {
-    [Header("Spline Handles & Points")]
+    [Header("Handles Points LSystems")]
     public List<Transform> handles;
     public Vector3[] generatedPoints;
+    public List<LSystems> generatedLSystems = new List<LSystems>();
+
 
     [Header("Catmull Rom Spline Settings")]
     [Range(10, 400)] public int totalSplinePoints = 20;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
     [Range(1, 3)] public float splineLengthMultiplier = 1f;
     public bool loopedSpline = false;
-
 
     [Header("Spline Curvature Settings")]
     [Range(-10, 10f)] public float horizontalCurvature = 0f;
@@ -47,6 +48,10 @@ public class PGSSpline : MonoBehaviour
     public bool useWeightFallOff = false;
     [Range(0, 1)] public float falloffInfluence = 1f;
 
+    [Header("L-SYSTEM Settings")]
+    [Range(1, 6)] public int lSystemCount = 1;
+    public LSystems lSystemPrefab;
+
     [Header("Gizmos Settings")]
     public bool enableGizmoAxes = false;
     [Range(0.1f, 1f)] public float gizmoAxesLength = 1f;
@@ -60,6 +65,11 @@ public class PGSSpline : MonoBehaviour
     private void Awake()
     {
         line = GetComponent<LineRenderer>();
+    }
+
+    private void Start()
+    {
+        SpawnLSystemOnSpline();
     }
 
     private void Update()
@@ -440,9 +450,39 @@ public class PGSSpline : MonoBehaviour
         }
     }
 
+    //-------------------------------------====[[[[[[ L SYSTEM SPAWN ON SPLINE FUNCTION HERE]]]]]]====-------------------------------------
+    private void SpawnLSystemOnSpline()
+    {
+        //Ensure list is refreshed every run
+        foreach (LSystems currentLsys in generatedLSystems) 
+        {
+            if (currentLsys != null) DestroyImmediate(currentLsys.gameObject);
+        }
+        generatedLSystems.Clear();
+
+        //Generate L systems on spline
+        for (int i = 0; i < lSystemCount; i++) 
+        {
+            float frac = (lSystemCount == 1) ? 0f : i / (float)(lSystemCount - 1);
+            Vector3 pos = EvalutePosition(frac);
+            Quaternion rot = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+
+            LSystems lSystemObj = Instantiate(lSystemPrefab, pos , rot);
+            generatedLSystems.Add(lSystemObj);
+        }
+    }
+
+    //-------------------------------------====[[[[[[ CATMULL-ROM SEGMENT AND POS CALCULATION HERE]]]]]]====-------------------------------------
+    public Vector3 EvalutePosition(float t) 
+    {
+        t = Mathf.Clamp01(t);
+        int pointIndex = Mathf.RoundToInt(t * (generatedPoints.Length - 1));
+        return generatedPoints[pointIndex];
+    }
+
     private Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
     {
-        // Calculate the Catmull-Rom spline point at parameter t
+        // Calculate the Catmull-Rom spline point at t value
         float t2 = t * t;
         float t3 = t2 * t;
 
@@ -452,6 +492,7 @@ public class PGSSpline : MonoBehaviour
                        (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
     }
 
+    //-------------------------------------====[[[[[[ GIZMOS HERE ]]]]]]====-------------------------------------
     private void OnDrawGizmos()
     {
         BuildSplineFromHandles();
