@@ -269,10 +269,9 @@ public class PGSSpline : MonoBehaviour
                 float sideValue = (sideNoise - 0.5f) * 2f;
                 float upValue = (upNoise - 0.5f) * 2f;
 
-                //Sharpen noise to get spikyness
+                //Raise the noise exponentially to get spikyness
                 sideValue = Mathf.Sign(sideValue) * Mathf.Pow(Mathf.Abs(sideValue), noiseSharpness);
                 upValue = Mathf.Sign(upValue) * Mathf.Pow(Mathf.Abs(upValue), noiseSharpness);
-
 
                 noiseOffset = (side * sideValue * noiseAmplitude) + (up * upValue * noiseAmplitude);
             }
