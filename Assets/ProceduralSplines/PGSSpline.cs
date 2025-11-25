@@ -11,7 +11,6 @@ public class PGSSpline : MonoBehaviour
     public Vector3[] generatedPoints;
     public List<LSystems> generatedLSystems = new List<LSystems>();
 
-
     [Header("Catmull Rom Spline Settings")]
     [Range(10, 400)] public int totalSplinePoints = 20;
     [Range(1, 5)] public int segmentResolution = 1; //Resolution per each "catmull curve segment"
@@ -30,7 +29,7 @@ public class PGSSpline : MonoBehaviour
     [Header("Perlin Noise Settings")]
     public bool enableNoise = false;
     [Range(0.01f, 2f)] public float noiseAmplitude = 1f;
-    [Range(0.001f, 1f)] public float noiseFrequency = 1f;
+    [Range(0.001f, 0.9f)] public float noiseFrequency = 1f;
     [Range(-100f, 100f)] public float perlinOffset = 0f;
     [Range(0.25f, 4f)] public float noiseSharpness = 1f;
 
@@ -56,12 +55,12 @@ public class PGSSpline : MonoBehaviour
     [Header("Gizmos Settings")]
     public bool enableGizmoAxes = false;
     [Range(0.1f, 1f)] public float gizmoAxesLength = 1f;
-    public bool enableGizmoPoints = false;
+    public bool enableGizmoPoints = true;
     [Range(0.01f, 0.1f)] public float gizmoSphereRadius = 0.065f;
 
     private LineRenderer line;
 
-    //CONSIDER: Objects that will always attract or repel
+    //Add: Objects that will always attract or repel
 
     private void Awake()
     {
@@ -127,7 +126,7 @@ public class PGSSpline : MonoBehaviour
                 totalSplineLength += currentSectionLength;
             }
         }
-        else //Not looped?
+        else
         {
             for (int i = 0; i < splineSectionCount; i++)
             {
@@ -150,20 +149,20 @@ public class PGSSpline : MonoBehaviour
 
         for (int i = 0; i < splineSectionCount; i++)
         {
-            // splineSecCount - 1 = Last spline section, and last spline section gets whatever points are left
+            //splineSecCount - 1 = Last spline section, and last spline section gets whatever points are left
             if (i == splineSectionCount - 1)
             {
                 internalPointsPerSection[i] = remainingInternal;
             }
             else
             {
-                float share = (remainingLength > 0f) ? (lengthOfSplineSection[i] / remainingLength) : 0f;
-                int allocated = Mathf.RoundToInt(remainingInternal * share);
+                float share = lengthOfSplineSection[i] / remainingLength;
+                int allocatedPoints = Mathf.RoundToInt(remainingInternal * share);
 
-                if (allocated < 0) allocated = 0;
+                if (allocatedPoints < 0) allocatedPoints = 0;
 
-                internalPointsPerSection[i] = allocated;
-                remainingInternal -= allocated;
+                internalPointsPerSection[i] = allocatedPoints;
+                remainingInternal -= allocatedPoints;
                 remainingLength -= lengthOfSplineSection[i];
             }
         }
@@ -244,17 +243,17 @@ public class PGSSpline : MonoBehaviour
             Vector3 currentPointOnLine = extendedA + dir * (extendedDistance * t);
 
             //CURVATURE LOGIC
-            float arcWeightFactor = useWeightFallOff? Mathf.Sin(Mathf.PI * t) * falloffInfluence : 1f; //Sin90 = 0
-            Vector3 curvatureOffset = (side * horizontalCurvature * arcWeightFactor) + (up * verticalCurvature * arcWeightFactor);
+            float arcFallOff = useWeightFallOff? Mathf.Sin(Mathf.PI * t) * falloffInfluence : 1f; //Sin90 = 0
+            Vector3 curvatureOffset = (side * horizontalCurvature * arcFallOff) + (up * verticalCurvature * arcFallOff);
 
             //SPIRAL LOGIC
             Vector3 spiralOffset = Vector3.zero;
             if (enableSpiral)
             {
                 Vector3 radialDir = side;
-                float angle = t * Mathf.PI * 2f * spiralTurns;
+                float radius = spiralRadius * arcFallOff; 
+                float angle = spiralTurns * t * (Mathf.PI * 2f);
                 radialDir = (side * Mathf.Cos(angle)) + (Vector3.up * Mathf.Sin(angle));
-                float radius = spiralRadius * arcWeightFactor; 
                 spiralOffset = radialDir * radius;
             }
 
@@ -266,7 +265,7 @@ public class PGSSpline : MonoBehaviour
                 float sideNoise = Mathf.PerlinNoise(noiseBase, 0f);
                 float upNoise = Mathf.PerlinNoise(-sideNoise, 0f);
 
-                //Remmap side and up noise to -1, 1 for directional functionality
+                //Remmap side n up noise to -1, 1 for directional functionality
                 float sideValue = (sideNoise - 0.5f) * 2f;
                 float upValue = (upNoise - 0.5f) * 2f;
 
@@ -291,7 +290,7 @@ public class PGSSpline : MonoBehaviour
                 for (int i = 0; i < maxCollisions; i++)
                 {
                     Collider currentCol = cols[i];
-                    targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcWeightFactor, A, B);
+                    targetOffset += ComputeColliderBendOffset(basePos, currentCol, arcFallOff, A, B);
                 }
             }
 
@@ -348,7 +347,7 @@ public class PGSSpline : MonoBehaviour
 
     private void RedistributePointsEvenlyAlongCurve(ref Vector3[] points)
     {
-        //1 - Dense samples along current Catmull curve
+        //1 - Samples again over entire curve
         List<Vector3> revaluatedPoints = new List<Vector3>();
         int totalCatmullSegments = points.Length - 3;
 
@@ -371,7 +370,7 @@ public class PGSSpline : MonoBehaviour
             }
         }
 
-        //2 - Cumulative distances
+        //2 - Cumulative distances at each cell
         float[] cumLen = new float[revaluatedPoints.Count];
         cumLen[0] = 0f;
 
@@ -385,32 +384,31 @@ public class PGSSpline : MonoBehaviour
 
         //3 - New points at equal distance intervals
         Vector3[] newPoints = new Vector3[points.Length];
-        int denseIndex = 0;
-
+        
+        int index = 0;
         for (int i = 0; i < points.Length; i++)
         {
             float targetDist = (i / (float)(points.Length - 1)) * totalLen;
 
-            while (denseIndex < revaluatedPoints.Count - 2 && cumLen[denseIndex + 1] < targetDist)
+            while (index < revaluatedPoints.Count - 2 && cumLen[index + 1] < targetDist)
             {
-                denseIndex++;
+                index++;
             }
 
-            float segmentStart = cumLen[denseIndex];
-            float segmentEnd = cumLen[denseIndex + 1];
+            float segmentStart = cumLen[index];
+            float segmentEnd = cumLen[index + 1];
             float segmentLen = segmentEnd - segmentStart;
 
-            float u = 0f;
-            if (segmentLen > 0f)
-                u = (targetDist - segmentStart) / segmentLen;
+            float t = 0f;
+            if (segmentLen > 0f) t = (targetDist - segmentStart) / segmentLen;
 
-            Vector3 a = revaluatedPoints[denseIndex];
-            Vector3 b = revaluatedPoints[denseIndex + 1];
+            Vector3 a = revaluatedPoints[index];
+            Vector3 b = revaluatedPoints[index + 1];
 
-            newPoints[i] = Vector3.Lerp(a, b, u);
+            newPoints[i] = Vector3.Lerp(a, b, t);
         }
 
-        //Fix for bug that caused spline to have 1 segment missing at A and B
+        //NOTE: Fix for bug that caused spline to have 1 segment missing at A and B
         //Since this is catmull curve, passing the internal points will cause it to redistribute from p2 rather than p1, hence why passing A and B
         Vector3 start = points[0]; //Old A
         Vector3 end = points[points.Length - 1]; //Old B
