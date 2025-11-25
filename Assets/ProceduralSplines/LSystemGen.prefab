@@ -44,9 +44,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ff6914401740f44488346cc594a8a63, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  SO: {fileID: 11400000, guid: 8cd813f48e534c14ab267fa1e2014abe, type: 2}
+  SO: {fileID: 11400000, guid: 77557555856747841a7883b41919625d, type: 2}
   axiom: FB
-  ruleF: FF
+  ruleF: F
   ruleB: '[+FB][-FB]'
   iterations: 7
   angle: 61

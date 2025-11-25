@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e89d1ef663c56594db81f87ded43bb92, type: 3}
-  m_Name: SOLSystemLightning
+  m_Name: SOLSystemLightning2
   m_EditorClassIdentifier: 
   axiom: F
-  ruleF: F[+F]F[-F]F
+  ruleF: 'F[+F]F[-F]'
   ruleB: B
-  iterations: 4
-  angle: 34.8
-  length: 0.302
+  iterations: 5
+  angle: 23
+  length: 1
   enableRandomness: 1
