@@ -30,7 +30,7 @@ public class LSystems : MonoBehaviour
         }
 
         tree = axiom;
-        Debug.Log("Starting tree: " + tree);
+        //Debug.Log("Starting tree: " + tree);
         ExpandTreeString();
         CreateMesh();
     }
@@ -78,7 +78,7 @@ public class LSystems : MonoBehaviour
             }
 
             tree = expandedTree;
-            Debug.Log("Tree at iteration "+i+" is "+tree);
+            //Debug.Log("Tree at iteration "+i+" is "+tree);
         }
     }
 
